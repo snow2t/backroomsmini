@@ -1,0 +1,546 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BACKROOMS: LOST SIGNAL</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#050505;color:white;font-family:monospace}
+canvas{display:block;image-rendering:pixelated}
+#hud{position:fixed;inset:0;pointer-events:none}
+#top{position:absolute;top:15px;left:18px;text-shadow:2px 2px black}
+#level{font-size:21px;font-weight:bold}
+#stats{font-size:12px;margin-top:7px}
+#survival{margin-top:9px;font-size:12px;line-height:1.7}
+.bar{width:150px;height:8px;background:#333;margin-bottom:5px}
+.fill{height:100%;width:100%;transition:width .2s}
+#tasks{position:absolute;top:145px;left:18px;font-size:12px;line-height:1.8;text-shadow:2px 2px black}
+#crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:22px}
+#prompt{position:absolute;bottom:22%;width:100%;text-align:center;text-shadow:2px 2px black}
+#help{position:absolute;bottom:14px;left:15px;font-size:11px;text-shadow:1px 1px black}
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:5;text-align:center;padding:20px}
+.panel{max-width:550px;width:100%;border:1px solid #777;background:#101010;padding:30px}
+h1{font-size:clamp(30px,7vw,55px);margin:0 0 8px;letter-spacing:3px}
+.sub{color:#aaa;font-size:12px;letter-spacing:3px;margin-bottom:25px}
+button{background:#d0b75d;color:#17130a;border:0;padding:14px 24px;font-family:monospace;font-weight:bold;cursor:pointer;margin:6px}
+.small{font-size:12px;color:#999;line-height:1.8}
+#message{color:#e6d58a;min-height:22px;margin:12px}
+#damage{position:fixed;inset:0;background:#8b0000;opacity:0;pointer-events:none;z-index:3;transition:opacity .1s}
+#noise{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(255,255,255,.08) 4px)}
+#inventory{position:absolute;right:18px;top:18px;text-align:right;font-size:12px;text-shadow:2px 2px black}
+</style>
+</head>
+<body>
+
+<div id="hud">
+ <div id="top">
+  <div id="level">LEVEL 0</div>
+  <div id="stats">SIGNAL: STABLE</div>
+  <div id="survival">
+   HEALTH <div class="bar"><div id="healthBar" class="fill" style="background:#55c77c"></div></div>
+   SANITY <div class="bar"><div id="sanityBar" class="fill" style="background:#a76be5"></div></div>
+  </div>
+ </div>
+ <div id="tasks"></div>
+ <div id="inventory">ALMOND WATER: <span id="waterCount">0</span></div>
+ <div id="crosshair">+</div>
+ <div id="prompt"></div>
+ <div id="help">WASD MOVE | MOUSE LOOK | SHIFT RUN | E INTERACT | ESC PAUSE</div>
+</div>
+
+<div id="damage"></div>
+<div id="noise"></div>
+
+<div id="overlay">
+ <div class="panel">
+  <h1>BACKROOMS</h1>
+  <div class="sub">LOST SIGNAL // SURVIVAL EXPERIMENT</div>
+  <p>Reality has failed. Find an exit. Avoid what lives here.</p>
+  <button id="start">ENTER THE BACKROOMS</button>
+  <div id="message">Your location is unknown.</div>
+  <div class="small">
+   WASD to move<br>Mouse to look around<br>
+   SHIFT to sprint<br>E to enter doors<br>
+   Collect Almond Water to restore sanity.<br>
+   Complete objectives to survive.<br><br>
+   HEADPHONES RECOMMENDED
+  </div>
+ </div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+
+const $=id=>document.getElementById(id);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,100);
+camera.position.set(0,1.65,0);
+camera.rotation.order="YXZ";
+
+const renderer=new THREE.WebGLRenderer({antialias:false});
+renderer.setPixelRatio(1);
+renderer.setSize(innerWidth,innerHeight);
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const ambient=new THREE.HemisphereLight(0xffffff,0x44402a,1.5);
+const mainLight=new THREE.PointLight(0xffe6a0,2,25);
+scene.add(ambient,mainLight);
+
+const clock=new THREE.Clock();
+const keys={};
+const TILE=4,SIZE=25,HALF=12;
+let map=[],doors=[],monsters=[],waters=[];
+let levelName="LEVEL 0",doorNear=null;
+let paused=true,running=false;
+let health=100,sanity=100,waterCount=0;
+let timeAlive=0,yaw=0,pitch=0,lastHit=0;
+let objectives=[],explored=new Set();
+let lastCell="";
+
+const mats={
+ yellow:new THREE.MeshStandardMaterial({color:0xb9a45b}),
+ floor:new THREE.MeshStandardMaterial({color:0x756a45}),
+ ceiling:new THREE.MeshStandardMaterial({color:0x928657}),
+ concrete:new THREE.MeshStandardMaterial({color:0x777777}),
+ office:new THREE.MeshStandardMaterial({color:0x858b83}),
+ pipe:new THREE.MeshStandardMaterial({color:0x52645a}),
+ pool:new THREE.MeshStandardMaterial({color:0x287f9d}),
+ party:new THREE.MeshStandardMaterial({color:0xb04b9b}),
+ red:new THREE.MeshStandardMaterial({color:0x8c1717}),
+ black:new THREE.MeshStandardMaterial({color:0x151515}),
+ entity:new THREE.MeshStandardMaterial({color:0x080808}),
+ eye:new THREE.MeshBasicMaterial({color:0xff2424})
+};
+
+const levels={
+ "LEVEL 0":{wall:mats.yellow,floor:mats.floor,ceil:mats.ceiling,fog:0xaaa17a},
+ "OFFICES":{wall:mats.office,floor:mats.concrete,ceil:mats.office,fog:0x626b66},
+ "PARKING GARAGE":{wall:mats.concrete,floor:mats.concrete,ceil:mats.black,fog:0x333333},
+ "PIPES":{wall:mats.pipe,floor:mats.concrete,ceil:mats.pipe,fog:0x293a36},
+ "LEVEL !":{wall:mats.red,floor:mats.red,ceil:mats.red,fog:0x470909},
+ "POOL ROOMS":{wall:mats.pool,floor:mats.pool,ceil:mats.pool,fog:0x176080},
+ "PARTY ROOMS":{wall:mats.party,floor:mats.floor,ceil:mats.party,fog:0x57234c}
+};
+
+function rand(){return Math.random()}
+function cell(x,z){return map[z+HALF]?.[x+HALF]===0}
+function world(x,z){return{x:x*TILE,z:z*TILE}}
+
+function box(x,y,z,w,h,d,mat){
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+ m.position.set(x,y,z);
+ scene.add(m);
+ return m;
+}
+
+function clearWorld(){
+ while(scene.children.length)scene.remove(scene.children[0]);
+ scene.add(ambient,mainLight);
+ doors=[];monsters=[];waters=[];
+}
+
+function generateMaze(){
+ map=Array.from({length:SIZE},()=>Array(SIZE).fill(1));
+ const stack=[[0,0]];
+ map[HALF][HALF]=0;
+ while(stack.length){
+  const [x,z]=stack[stack.length-1];
+  const choices=[[0,-2],[2,0],[0,2],[-2,0]].filter(([dx,dz])=>{
+   let nx=x+dx,nz=z+dz;
+   return nx>=-HALF+1&&nx<HALF&&nz>=-HALF+1&&nz<HALF&&map[nz+HALF][nx+HALF]===1;
+  });
+  if(!choices.length){stack.pop();continue}
+  const [dx,dz]=choices[Math.floor(rand()*choices.length)];
+  map[z+dz+HALF][x+dx+HALF]=0;
+  map[z+dz/2+HALF][x+dx/2+HALF]=0;
+  stack.push([x+dx,z+dz]);
+ }
+ for(let i=0;i<20;i++){
+  let x=Math.floor(rand()*17)-8,z=Math.floor(rand()*17)-8;
+  for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){
+   if(Math.abs(x+a)<HALF&&Math.abs(z+b)<HALF)map[z+b+HALF][x+a+HALF]=0;
+  }
+ }
+}
+
+function findOpen(min=3,used=[]){
+ const options=[];
+ for(let z=-HALF+1;z<HALF;z++)for(let x=-HALF+1;x<HALF;x++){
+  if(cell(x,z)&&Math.hypot(x,z)>=min&&!used.some(p=>Math.hypot(p.x-x,p.z-z)<4))options.push({x,z});
+ }
+ return options.length?options[Math.floor(rand()*options.length)]:{x:5,z:5};
+}
+
+function addDoor(name,x,z,color=0xffd45a){
+ const p=world(x,z),g=new THREE.Group();
+ g.position.set(p.x,0,p.z);
+ const frame=new THREE.Mesh(new THREE.BoxGeometry(1.9,2.9,.25),new THREE.MeshStandardMaterial({color}));
+ frame.position.y=1.45;
+ const hole=new THREE.Mesh(new THREE.BoxGeometry(1.4,2.4,.3),new THREE.MeshBasicMaterial({color:0x080808}));
+ hole.position.set(0,1.2,-.02);
+ const light=new THREE.PointLight(color,2,7);
+ light.position.set(0,2,1);
+ g.add(frame,hole,light);
+ scene.add(g);
+ doors.push({name,x:p.x,z:p.z,group:g});
+}
+
+function addMonster(x,z){
+ const p=world(x,z),g=new THREE.Group();
+ const body=new THREE.Mesh(new THREE.BoxGeometry(.8,2.1,.65),mats.entity);
+ body.position.y=1.1;
+ g.add(body);
+ for(let i=0;i<2;i++){
+  const eye=new THREE.Mesh(new THREE.BoxGeometry(.13,.13,.08),mats.eye);
+  eye.position.set(i===0?-.19:.19,1.65,.34);
+  g.add(eye);
+ }
+ g.position.set(p.x,0,p.z);
+ scene.add(g);
+ monsters.push({group:g,speed:1.1+rand()*.7,phase:rand()*10});
+}
+
+function spawnWater(){
+ waters=[];
+ for(let i=0;i<5;i++){
+  const p=findOpen(3,[]);
+  const g=new THREE.Group();
+  const bottle=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,.48,6),new THREE.MeshStandardMaterial({color:0x9bd8ed,transparent:true,opacity:.9}));
+  const cap=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,.08,6),new THREE.MeshStandardMaterial({color:0xffffff}));
+  cap.position.y=.28;
+  const label=new THREE.Mesh(new THREE.BoxGeometry(.27,.15,.14),new THREE.MeshBasicMaterial({color:0xffffff}));
+  label.position.z=.1;
+  g.add(bottle,cap,label);
+  const pos=world(p.x,p.z);
+  g.position.set(pos.x,.65,pos.z);
+  g.add(new THREE.PointLight(0x69caff,.7,4));
+  scene.add(g);
+  waters.push(g);
+ }
+}
+
+const taskPool=[
+ {name:"Collect 3 Almond Water bottles",type:"water",goal:3},
+ {name:"Explore 5 different areas",type:"explore",goal:5},
+ {name:"Survive for 120 seconds",type:"survive",goal:120},
+ {name:"Find an exit door",type:"door",goal:1},
+ {name:"Discover 3 different levels",type:"levels",goal:3},
+ {name:"Collect 5 Almond Water bottles",type:"water",goal:5}
+];
+
+function generateTasks(){
+ const pool=[...taskPool].sort(()=>rand()-.5);
+ objectives=pool.slice(0,3).map(t=>({...t,progress:0,done:false}));
+ updateTasks();
+}
+
+function progressTask(type,amount=1){
+ for(const t of objectives){
+  if(t.type===type&&!t.done){
+   t.progress=Math.min(t.goal,t.progress+amount);
+   if(t.progress>=t.goal){
+    t.done=true;
+    sanity=Math.min(100,sanity+10);
+    $("message").textContent="OBJECTIVE COMPLETED: "+t.name;
+   }
+  }
+ }
+ updateTasks();
+}
+
+function updateTasks(){
+ $("tasks").innerHTML="<b>ACTIVE OBJECTIVES</b><br>"+
+ objectives.map(t=>(t.done?"[COMPLETE] ":"[ ] ")+t.name+
+ " ("+Math.floor(t.progress)+"/"+t.goal+")").join("<br>");
+}
+
+function updateHUD(){
+ $("healthBar").style.width=health+"%";
+ $("sanityBar").style.width=sanity+"%";
+ $("healthBar").style.background=health<30?"#e44":"#55c77c";
+ $("sanityBar").style.background=sanity<30?"#b65cff":"#80d89a";
+ $("waterCount").textContent=waterCount;
+}
+
+function buildWorld(name){
+ clearWorld();
+ levelName=name;
+ const info=levels[name];
+ scene.background=new THREE.Color(info.fog);
+ scene.fog=new THREE.FogExp2(info.fog,name==="POOL ROOMS"?.025:.035);
+ generateMaze();
+
+ box(0,-.2,0,SIZE*TILE,.4,SIZE*TILE,info.floor);
+ box(0,3.2,0,SIZE*TILE,.3,SIZE*TILE,info.ceil);
+
+ for(let z=-HALF;z<=HALF;z++)for(let x=-HALF;x<=HALF;x++){
+  if(!cell(x,z)){
+   const p=world(x,z);
+   box(p.x,1.5,p.z,TILE,3,TILE,info.wall);
+  }
+ }
+
+ if(name==="POOL ROOMS"){
+  for(let i=0;i<7;i++){
+   const x=(rand()-.5)*65,z=(rand()-.5)*65;
+   const water=new THREE.Mesh(new THREE.BoxGeometry(5,.12,5),new THREE.MeshStandardMaterial({color:0x168db2,transparent:true,opacity:.7}));
+   water.position.set(x,.02,z);
+   scene.add(water);
+  }
+ }
+
+ if(name==="OFFICES"||name==="PARKING GARAGE"){
+  for(let i=0;i<16;i++){
+   const x=(rand()-.5)*65,z=(rand()-.5)*65;
+   if(name==="OFFICES"){
+    box(x,.65,z,2,.15,1,mats.concrete);
+    box(x,.3,z,1.8,.5,.8,mats.black);
+   }else box(x,1.5,z,.7,3,.7,mats.black);
+  }
+ }
+
+ if(name==="PIPES"){
+  for(let i=0;i<15;i++){
+   const pipe=new THREE.Mesh(new THREE.CylinderGeometry(.15,.15,9,6),mats.pipe);
+   pipe.rotation.z=Math.PI/2;
+   pipe.position.set((rand()-.5)*65,2.5,(rand()-.5)*65);
+   scene.add(pipe);
+  }
+ }
+
+ if(name==="PARTY ROOMS"){
+  for(let i=0;i<16;i++){
+   const balloon=new THREE.Mesh(new THREE.SphereGeometry(.28,6,5),new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(rand(),.8,.6)}));
+   balloon.position.set((rand()-.5)*65,2,(rand()-.5)*65);
+   scene.add(balloon);
+  }
+ }
+
+ const used=[];
+ if(name==="LEVEL 0"){
+  ["OFFICES","PARKING GARAGE","PIPES","LEVEL !"].forEach((n,i)=>{
+   const p=findOpen(5,used);used.push(p);
+   addDoor(n,p.x,p.z,[0x6ac9ff,0xffcc66,0x75ffb2,0xff2222][i]);
+  });
+ }else{
+  const p=findOpen(4,used);used.push(p);
+  addDoor("LEVEL 0",p.x,p.z,0xffdf70);
+  const q=findOpen(5,used);used.push(q);
+  addDoor("POOL ROOMS",q.x,q.z,0x39cfff);
+  const r=findOpen(5,used);
+  addDoor("PARTY ROOMS",r.x,r.z,0xff55bb);
+ }
+
+ const count=name==="LEVEL !"?7:name==="POOL ROOMS"?3:4;
+ for(let i=0;i<count;i++){
+  const p=findOpen(7,[]);
+  addMonster(p.x,p.z);
+ }
+
+ spawnWater();
+ camera.position.set(0,1.65,0);
+ yaw=0;pitch=0;
+ mainLight.position.set(0,2.8,0);
+ mainLight.intensity=name==="LEVEL !"?1.1:2;
+ $("level").textContent=name;
+ $("stats").textContent="SIGNAL: UNSTABLE | ENTITIES: "+count;
+ $("prompt").textContent="";
+}
+
+function collectWater(){
+ for(let i=waters.length-1;i>=0;i--){
+  const b=waters[i];
+  if(Math.hypot(camera.position.x-b.position.x,camera.position.z-b.position.z)<1.4){
+   sanity=Math.min(100,sanity+35);
+   scene.remove(b);
+   waters.splice(i,1);
+   waterCount++;
+   progressTask("water");
+   $("message").textContent="ALMOND WATER COLLECTED: +35 SANITY";
+   updateHUD();
+  }
+ }
+}
+
+function updateSanity(dt){
+ sanity=Math.max(0,sanity-dt*.13);
+ const low=sanity<30;
+ $("noise").style.opacity=low?String(.15+rand()*.25):"0";
+ camera.fov=low?75+Math.sin(performance.now()*.008)*3:75;
+ camera.updateProjectionMatrix();
+ if(sanity<=0){
+  $("stats").textContent="SANITY DEPLETED";
+  $("noise").style.opacity=".5";
+ }
+ updateHUD();
+}
+
+function canMove(x,z){
+ const gx=Math.round(x/TILE),gz=Math.round(z/TILE);
+ return cell(gx,gz);
+}
+
+function movePlayer(dt){
+ const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+ const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+ const dir=new THREE.Vector3();
+ if(keys.KeyW)dir.add(forward);
+ if(keys.KeyS)dir.sub(forward);
+ if(keys.KeyD)dir.add(right);
+ if(keys.KeyA)dir.sub(right);
+ if(!dir.lengthSq())return;
+ dir.normalize();
+ const speed=keys.ShiftLeft||keys.ShiftRight?7:4.2;
+ const step=dir.multiplyScalar(speed*dt);
+ const nx=camera.position.x+step.x,nz=camera.position.z+step.z;
+ if(canMove(nx,camera.position.z))camera.position.x=nx;
+ if(canMove(camera.position.x,nz))camera.position.z=nz;
+
+ const c=Math.round(camera.position.x/TILE)+","+Math.round(camera.position.z/TILE);
+ if(c!==lastCell){
+  lastCell=c;
+  if(!explored.has(c)){
+   explored.add(c);
+   progressTask("explore");
+  }
+ }
+}
+
+function updateDoors(){
+ doorNear=null;
+ let closest=2.5;
+ for(const d of doors){
+  const dist=Math.hypot(camera.position.x-d.x,camera.position.z-d.z);
+  if(dist<closest){closest=dist;doorNear=d}
+ }
+ $("prompt").textContent=doorNear?"[ E ] ENTER "+doorNear.name:"";
+}
+
+function interact(){
+ if(!doorNear)return;
+ const destination=doorNear.name;
+ progressTask("door");
+ if(!explored.has("LEVEL:"+destination)){
+  explored.add("LEVEL:"+destination);
+  progressTask("levels");
+ }
+ buildWorld(destination);
+}
+
+function updateMonsters(dt){
+ const now=performance.now()/1000;
+ for(const m of monsters){
+  const p=m.group.position;
+  const dx=camera.position.x-p.x,dz=camera.position.z-p.z;
+  const dist=Math.hypot(dx,dz);
+  if(dist<18){
+   const speed=m.speed*(dist<5?1.4:1);
+   const nx=p.x+dx/dist*speed*dt;
+   const nz=p.z+dz/dist*speed*dt;
+   if(canMove(nx,nz)){p.x=nx;p.z=nz}
+   m.group.rotation.y=Math.atan2(dx,dz);
+  }
+  m.group.position.y=Math.sin(now*2+m.phase)*.07;
+  if(dist<1.25&&now-lastHit>1.5){
+   lastHit=now;
+   health=Math.max(0,health-12);
+   sanity=Math.max(0,sanity-8);
+   $("damage").style.opacity=".45";
+   setTimeout(()=>$("damage").style.opacity="0",130);
+   $("stats").textContent="ENTITY CONTACT";
+   updateHUD();
+   if(health<=0)gameOver();
+  }
+ }
+}
+
+function gameOver(){
+ paused=true;
+ document.exitPointerLock?.();
+ $("overlay").style.display="flex";
+ $("message").textContent="SIGNAL LOST. YOUR RUN HAS ENDED.";
+ $("start").textContent="TRY AGAIN";
+}
+
+function startGame(){
+ health=100;
+ sanity=100;
+ waterCount=0;
+ timeAlive=0;
+ explored=new Set();
+ lastCell="";
+ generateTasks();
+ updateHUD();
+ buildWorld("LEVEL 0");
+ paused=false;
+ running=true;
+ $("overlay").style.display="none";
+ renderer.domElement.requestPointerLock?.();
+}
+
+$("start").onclick=()=>{
+ if(running&&paused&&health>0){
+  paused=false;
+  $("overlay").style.display="none";
+  renderer.domElement.requestPointerLock?.();
+ }else startGame();
+};
+
+document.addEventListener("keydown",e=>{
+ keys[e.code]=true;
+ if(e.code==="KeyE"&&!paused)interact();
+});
+document.addEventListener("keyup",e=>keys[e.code]=false);
+
+document.addEventListener("mousemove",e=>{
+ if(document.pointerLockElement!==renderer.domElement||paused)return;
+ yaw-=e.movementX*.002;
+ pitch-=e.movementY*.002;
+ pitch=Math.max(-1.45,Math.min(1.45,pitch));
+ camera.rotation.y=yaw;
+ camera.rotation.x=pitch;
+});
+
+document.addEventListener("pointerlockchange",()=>{
+ if(!document.pointerLockElement&&running&&!paused){
+  paused=true;
+  $("overlay").style.display="flex";
+  $("message").textContent="GAME PAUSED";
+  $("start").textContent="RESUME";
+ }
+});
+
+function animate(){
+ requestAnimationFrame(animate);
+ const dt=Math.min(clock.getDelta(),.04);
+ if(!paused){
+  movePlayer(dt);
+  updateDoors();
+  updateMonsters(dt);
+  collectWater();
+  updateSanity(dt);
+  timeAlive+=dt;
+  progressTask("survive",dt);
+  mainLight.position.x=camera.position.x;
+  mainLight.position.z=camera.position.z;
+  mainLight.intensity=1.7+Math.sin(performance.now()*.008)*.15;
+ }
+ renderer.render(scene,camera);
+}
+animate();
+
+addEventListener("resize",()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

@@ -4,251 +4,869 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BACKROOMS: LOST SIGNAL</title>
+<title>BACKROOMS // LOST SIGNAL</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;overflow:hidden;background:#050505;color:white;font-family:monospace}
-canvas{display:block;image-rendering:pixelated}
-#hud{position:fixed;inset:0;pointer-events:none}
-#top{position:absolute;top:15px;left:18px;text-shadow:2px 2px black}
-#level{font-size:21px;font-weight:bold}
-#stats{font-size:12px;margin-top:7px}
-#survival{margin-top:9px;font-size:12px;line-height:1.7}
-.bar{width:150px;height:8px;background:#333;margin-bottom:5px}
-.fill{height:100%;width:100%;transition:width .2s}
-#tasks{position:absolute;top:145px;left:18px;font-size:12px;line-height:1.8;text-shadow:2px 2px black}
-#crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:22px}
-#prompt{position:absolute;bottom:22%;width:100%;text-align:center;text-shadow:2px 2px black}
-#help{position:absolute;bottom:14px;left:15px;font-size:11px;text-shadow:1px 1px black}
-#overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:5;text-align:center;padding:20px}
-.panel{max-width:550px;width:100%;border:1px solid #777;background:#101010;padding:30px}
-h1{font-size:clamp(30px,7vw,55px);margin:0 0 8px;letter-spacing:3px}
-.sub{color:#aaa;font-size:12px;letter-spacing:3px;margin-bottom:25px}
-button{background:#d0b75d;color:#17130a;border:0;padding:14px 24px;font-family:monospace;font-weight:bold;cursor:pointer;margin:6px}
-.small{font-size:12px;color:#999;line-height:1.8}
-#message{color:#e6d58a;min-height:22px;margin:12px}
-#damage{position:fixed;inset:0;background:#8b0000;opacity:0;pointer-events:none;z-index:3;transition:opacity .1s}
-#noise{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(255,255,255,.08) 4px)}
-#inventory{position:absolute;right:18px;top:18px;text-align:right;font-size:12px;text-shadow:2px 2px black}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:white;font-family:monospace}
+canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+#game{position:fixed;inset:0;background:#000}
+#screen{position:fixed;inset:0;pointer-events:none;z-index:4}
+#top{position:absolute;left:12px;top:12px;text-shadow:2px 2px black}
+#level{font-size:20px;font-weight:bold}
+#status{font-size:12px;margin-top:6px}
+#bars{margin-top:10px;font-size:12px}
+.bar{height:8px;width:180px;background:#333;margin:3px 0 8px}
+.fill{height:100%;width:100%;transition:width .15s}
+#tasks{position:absolute;left:12px;top:130px;font-size:11px;line-height:1.8;text-shadow:2px 2px black;max-width:280px}
+#inventory{position:absolute;right:15px;top:15px;text-align:right;font-size:12px;text-shadow:2px 2px black}
+#center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:18px;text-shadow:2px 2px black}
+#prompt{position:absolute;bottom:20%;width:100%;text-align:center;text-shadow:2px 2px black;font-size:14px}
+#help{position:absolute;bottom:8px;left:12px;font-size:10px;text-shadow:2px 2px black}
+#noise{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0;background:repeating-linear-gradient(0deg,transparent 0px,transparent 2px,rgba(255,255,255,.12) 3px,transparent 4px)}
+#flash{position:fixed;inset:0;background:#8b0000;opacity:0;pointer-events:none;z-index:5}
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;z-index:10;text-align:center;padding:20px}
+.panel{max-width:650px;width:100%;background:#090909;border:1px solid #555;padding:30px;box-shadow:0 0 50px #000}
+h1{font-size:clamp(32px,8vw,70px);margin:0;letter-spacing:5px}
+.subtitle{letter-spacing:4px;color:#999;font-size:12px;margin:10px 0 30px}
+button{background:#c7b55e;color:#111;border:0;padding:15px 24px;font-family:monospace;font-weight:bold;cursor:pointer}
+button:hover{background:#fff}
+#message{margin:15px;color:#e3d18b;min-height:22px}
+#intro{color:#aaa;font-size:12px;line-height:2}
+#map{position:absolute;right:15px;bottom:45px;width:130px;height:130px;opacity:.6}
 </style>
 </head>
 <body>
 
-<div id="hud">
+<div id="game"></div>
+
+<div id="screen">
  <div id="top">
   <div id="level">LEVEL 0</div>
-  <div id="stats">SIGNAL: STABLE</div>
-  <div id="survival">
-   HEALTH <div class="bar"><div id="healthBar" class="fill" style="background:#55c77c"></div></div>
-   SANITY <div class="bar"><div id="sanityBar" class="fill" style="background:#a76be5"></div></div>
+  <div id="status">SIGNAL: UNKNOWN</div>
+  <div id="bars">
+   HEALTH
+   <div class="bar"><div id="health" class="fill" style="background:#4cc477"></div></div>
+   SANITY
+   <div class="bar"><div id="sanity" class="fill" style="background:#ad69df"></div></div>
   </div>
  </div>
+
  <div id="tasks"></div>
- <div id="inventory">ALMOND WATER: <span id="waterCount">0</span></div>
- <div id="crosshair">+</div>
+ <div id="inventory">ALMOND WATER: <span id="water">0</span></div>
+ <div id="center">+</div>
  <div id="prompt"></div>
- <div id="help">WASD MOVE | MOUSE LOOK | SHIFT RUN | E INTERACT | ESC PAUSE</div>
+ <canvas id="map"></canvas>
+ <div id="help">WASD MOVE | MOUSE LOOK | SHIFT RUN | E INTERACT | F DRINK | ESC PAUSE</div>
 </div>
 
-<div id="damage"></div>
 <div id="noise"></div>
+<div id="flash"></div>
 
 <div id="overlay">
  <div class="panel">
   <h1>BACKROOMS</h1>
-  <div class="sub">LOST SIGNAL // SURVIVAL EXPERIMENT</div>
-  <p>Reality has failed. Find an exit. Avoid what lives here.</p>
-  <button id="start">ENTER THE BACKROOMS</button>
-  <div id="message">Your location is unknown.</div>
-  <div class="small">
-   WASD to move<br>Mouse to look around<br>
-   SHIFT to sprint<br>E to enter doors<br>
-   Collect Almond Water to restore sanity.<br>
-   Complete objectives to survive.<br><br>
-   HEADPHONES RECOMMENDED
+  <div class="subtitle">LOST SIGNAL // BUILD 001</div>
+  <p>THE WORLD IS NOT WHAT IT WAS.</p>
+  <button id="start">ENTER</button>
+  <div id="message">You hear something moving in the walls.</div>
+  <div id="intro">
+   A procedurally generated survival horror experience.<br>
+   Find resources. Complete tasks. Find exits.<br>
+   Do not let the creature see you for too long.<br><br>
+   No maps. No guarantees. No way back.
   </div>
  </div>
 </div>
 
-<script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
-</script>
+<script>
+"use strict";
 
-<script type="module">
-import * as THREE from "three";
+/* =========================================================
+   BACKROOMS: LOST SIGNAL
+   Single-file canvas raycaster
+   ========================================================= */
 
 const $=id=>document.getElementById(id);
-const scene=new THREE.Scene();
-const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,100);
-camera.position.set(0,1.65,0);
-camera.rotation.order="YXZ";
+const canvas=document.createElement("canvas");
+const game=$("game");
+game.appendChild(canvas);
 
-const renderer=new THREE.WebGLRenderer({antialias:false});
-renderer.setPixelRatio(1);
-renderer.setSize(innerWidth,innerHeight);
-renderer.outputColorSpace=THREE.SRGBColorSpace;
-document.body.appendChild(renderer.domElement);
+const ctx=canvas.getContext("2d",{alpha:false});
+const W=320,H=200;
+canvas.width=W;
+canvas.height=H;
 
-const ambient=new THREE.HemisphereLight(0xffffff,0x44402a,1.5);
-const mainLight=new THREE.PointLight(0xffe6a0,2,25);
-scene.add(ambient,mainLight);
+const mapCanvas=$("map");
+const mapCtx=mapCanvas.getContext("2d");
+mapCanvas.width=130;
+mapCanvas.height=130;
 
-const clock=new THREE.Clock();
-const keys={};
-const TILE=4,SIZE=25,HALF=12;
-let map=[],doors=[],monsters=[],waters=[];
-let levelName="LEVEL 0",doorNear=null;
-let paused=true,running=false;
-let health=100,sanity=100,waterCount=0;
-let timeAlive=0,yaw=0,pitch=0,lastHit=0;
-let objectives=[],explored=new Set();
-let lastCell="";
+const PI=Math.PI;
+const TWO=PI*2;
+const rand=()=>Math.random();
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
-const mats={
- yellow:new THREE.MeshStandardMaterial({color:0xb9a45b}),
- floor:new THREE.MeshStandardMaterial({color:0x756a45}),
- ceiling:new THREE.MeshStandardMaterial({color:0x928657}),
- concrete:new THREE.MeshStandardMaterial({color:0x777777}),
- office:new THREE.MeshStandardMaterial({color:0x858b83}),
- pipe:new THREE.MeshStandardMaterial({color:0x52645a}),
- pool:new THREE.MeshStandardMaterial({color:0x287f9d}),
- party:new THREE.MeshStandardMaterial({color:0xb04b9b}),
- red:new THREE.MeshStandardMaterial({color:0x8c1717}),
- black:new THREE.MeshStandardMaterial({color:0x151515}),
- entity:new THREE.MeshStandardMaterial({color:0x080808}),
- eye:new THREE.MeshBasicMaterial({color:0xff2424})
+let gameRunning=false;
+let paused=true;
+let dead=false;
+
+let player={
+ x:1.5,y:1.5,angle:0,
+ health:100,sanity:100,
+ speed:2.4,run:3.6,
+ water:0
 };
 
-const levels={
- "LEVEL 0":{wall:mats.yellow,floor:mats.floor,ceil:mats.ceiling,fog:0xaaa17a},
- "OFFICES":{wall:mats.office,floor:mats.concrete,ceil:mats.office,fog:0x626b66},
- "PARKING GARAGE":{wall:mats.concrete,floor:mats.concrete,ceil:mats.black,fog:0x333333},
- "PIPES":{wall:mats.pipe,floor:mats.concrete,ceil:mats.pipe,fog:0x293a36},
- "LEVEL !":{wall:mats.red,floor:mats.red,ceil:mats.red,fog:0x470909},
- "POOL ROOMS":{wall:mats.pool,floor:mats.pool,ceil:mats.pool,fog:0x176080},
- "PARTY ROOMS":{wall:mats.party,floor:mats.floor,ceil:mats.party,fog:0x57234c}
-};
+let world=[];
+let WMAP=30,HMAP=30;
+let level="LEVEL 0";
+let doors=[];
+let items=[];
+let monsters=[];
+let furniture=[];
+let explored=[];
+let objectives=[];
+let visitedLevels=[];
+let cellsVisited=0;
 
-function rand(){return Math.random()}
-function cell(x,z){return map[z+HALF]?.[x+HALF]===0}
-function world(x,z){return{x:x*TILE,z:z*TILE}}
+let time=0;
+let lastTime=0;
+let frame=0;
+let lastHit=0;
+let damageFlash=0;
+let messageTimer=0;
+let messageText="";
+let lastInteract=0;
+let lastDrink=0;
+let activeDoor=null;
+let keys={};
+let mouseLocked=false;
+let moving=false;
+let monsterAlert=false;
+let monsterDistance=999;
+let monsterVisible=false;
+let searchTimer=0;
+let footsteps=0;
+let cellTracker="";
+let lightFlicker=0;
+let gameTime=0;
 
-function box(x,y,z,w,h,d,mat){
- const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
- m.position.set(x,y,z);
- scene.add(m);
- return m;
-}
-
-function clearWorld(){
- while(scene.children.length)scene.remove(scene.children[0]);
- scene.add(ambient,mainLight);
- doors=[];monsters=[];waters=[];
-}
-
-function generateMaze(){
- map=Array.from({length:SIZE},()=>Array(SIZE).fill(1));
- const stack=[[0,0]];
- map[HALF][HALF]=0;
- while(stack.length){
-  const [x,z]=stack[stack.length-1];
-  const choices=[[0,-2],[2,0],[0,2],[-2,0]].filter(([dx,dz])=>{
-   let nx=x+dx,nz=z+dz;
-   return nx>=-HALF+1&&nx<HALF&&nz>=-HALF+1&&nz<HALF&&map[nz+HALF][nx+HALF]===1;
-  });
-  if(!choices.length){stack.pop();continue}
-  const [dx,dz]=choices[Math.floor(rand()*choices.length)];
-  map[z+dz+HALF][x+dx+HALF]=0;
-  map[z+dz/2+HALF][x+dx/2+HALF]=0;
-  stack.push([x+dx,z+dz]);
+const levelColors={
+ "LEVEL 0":{
+  wall:[180,160,83],
+  floor:[108,96,59],
+  ceiling:[145,133,92],
+  fog:[119,108,72],
+  brightness:1
+ },
+ "OFFICES":{
+  wall:[140,146,133],
+  floor:[75,79,75],
+  ceiling:[108,112,105],
+  fog:[75,82,77],
+  brightness:.75
+ },
+ "PARKING GARAGE":{
+  wall:[100,100,103],
+  floor:[70,70,72],
+  ceiling:[55,55,58],
+  fog:[45,45,48],
+  brightness:.55
+ },
+ "PIPES":{
+  wall:[76,103,94],
+  floor:[55,64,61],
+  ceiling:[56,77,72],
+  fog:[36,48,45],
+  brightness:.65
+ },
+ "LEVEL !":{
+  wall:[130,22,25],
+  floor:[65,10,12],
+  ceiling:[75,10,15],
+  fog:[48,5,8],
+  brightness:.55
+ },
+ "POOL ROOMS":{
+  wall:[48,132,158],
+  floor:[33,104,134],
+  ceiling:[70,151,170],
+  fog:[23,74,112],
+  brightness:.85
+ },
+ "PARTY ROOMS":{
+  wall:[155,77,145],
+  floor:[104,77,81],
+  ceiling:[130,82,132],
+  fog:[68,35,70],
+  brightness:.8
  }
- for(let i=0;i<20;i++){
-  let x=Math.floor(rand()*17)-8,z=Math.floor(rand()*17)-8;
-  for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){
-   if(Math.abs(x+a)<HALF&&Math.abs(z+b)<HALF)map[z+b+HALF][x+a+HALF]=0;
+};
+
+/* OBJECT TYPES
+ 0 = empty
+ 1 = wall
+ 2 = door
+ 3 = furniture
+ 4 = special
+*/
+
+function msg(text,duration=3){
+ messageText=text;
+ messageTimer=duration;
+ $("message").textContent=text;
+}
+
+function normalizeAngle(a){
+ while(a<-PI)a+=TWO;
+ while(a>PI)a-=TWO;
+ return a;
+}
+
+function cell(x,y){
+ if(x<0||y<0||x>=WMAP||y>=HMAP)return 1;
+ return world[y][x];
+}
+
+function setCell(x,y,v){
+ if(x>=0&&y>=0&&x<WMAP&&y<HMAP)world[y][x]=v;
+}
+
+function dist(x,y,a,b){
+ return Math.hypot(x-a,y-b);
+}
+
+function makeWorld(){
+ world=Array.from({length:HMAP},()=>Array(WMAP).fill(1));
+
+ // Randomized maze using recursive carving.
+ const stack=[[1,1]];
+ setCell(1,1,0);
+
+ while(stack.length){
+  let [x,y]=stack[stack.length-1];
+  const directions=[[0,-2],[2,0],[0,2],[-2,0]]
+   .sort(()=>rand()-.5);
+
+  let found=false;
+
+  for(const [dx,dy] of directions){
+   const nx=x+dx,ny=y+dy;
+
+   if(nx>0&&ny>0&&nx<WMAP-1&&ny<HMAP-1&&cell(nx,ny)===1){
+    setCell(nx,ny,0);
+    setCell(x+dx/2,y+dy/2,0);
+    stack.push([nx,ny]);
+    found=true;
+    break;
+   }
+  }
+
+  if(!found)stack.pop();
+ }
+
+ // Create larger room areas.
+ for(let i=0;i<30;i++){
+  const rx=2+Math.floor(rand()*(WMAP-5));
+  const ry=2+Math.floor(rand()*(HMAP-5));
+  const rw=2+Math.floor(rand()*4);
+  const rh=2+Math.floor(rand()*4);
+
+  for(let y=ry;y<ry+rh;y++){
+   for(let x=rx;x<rx+rw;x++){
+    if(x<WMAP-1&&y<HMAP-1)setCell(x,y,0);
+   }
+  }
+ }
+
+ // Spawn protection.
+ for(let y=1;y<5;y++)for(let x=1;x<5;x++)setCell(x,y,0);
+
+ explored=Array.from({length:HMAP},()=>Array(WMAP).fill(false));
+}
+
+function openCell(){
+ let options=[];
+ for(let y=1;y<HMAP-1;y++)for(let x=1;x<WMAP-1;x++){
+  if(cell(x,y)===0&&dist(x,y,player.x,player.y)>4)options.push({x,y});
+ }
+ if(!options.length)return{x:5,y:5};
+ return options[Math.floor(rand()*options.length)];
+}
+
+function placeDoor(destination,x,y,color){
+ setCell(x,y,2);
+ doors.push({x,y,destination,color});
+}
+
+function spawnFurniture(){
+ furniture=[];
+ const count=level==="LEVEL 0"?85:level==="OFFICES"?100:level==="PARKING GARAGE"?65:level==="PIPES"?55:level==="POOL ROOMS"?40:level==="PARTY ROOMS"?60:45;
+
+ for(let i=0;i<count;i++){
+  const p=openCell();
+  const type=Math.floor(rand()*6);
+  let object={
+   x:p.x+.5,y:p.y+.5,
+   type:type,
+   size: .3+rand()*.45,
+   rotation:rand()*TWO,
+   color:rand()
+  };
+  furniture.push(object);
+  setCell(p.x,p.y,3);
+ }
+}
+
+function spawnDoors(){
+ doors=[];
+ const used=[];
+
+ if(level==="LEVEL 0"){
+  const destinations=["OFFICES","PARKING GARAGE","PIPES","LEVEL !"];
+  for(const d of destinations){
+   const p=openCell();
+   used.push(p);
+   placeDoor(d,p.x,p.y);
+  }
+ }else{
+  let p=openCell();
+  placeDoor("LEVEL 0",p.x,p.y);
+  used.push(p);
+
+  p=openCell();
+  placeDoor("POOL ROOMS",p.x,p.y);
+  used.push(p);
+
+  p=openCell();
+  placeDoor("PARTY ROOMS",p.x,p.y);
+ }
+}
+
+function spawnItems(){
+ items=[];
+ const count=10+Math.floor(rand()*6);
+
+ for(let i=0;i<count;i++){
+  const p=openCell();
+  items.push({
+   x:p.x+.5,y:p.y+.5,
+   type:"almond",
+   phase:rand()*TWO
+  });
+ }
+}
+
+function spawnMonster(){
+ monsters=[];
+ const count=level==="LEVEL !"?2:level==="POOL ROOMS"?1:1;
+
+ for(let i=0;i<count;i++){
+  const p=openCell();
+  monsters.push({
+   x:p.x+.5,y:p.y+.5,
+   angle:rand()*TWO,
+   speed:2.9,
+   seen:false,
+   searching:false,
+   search:0,
+   lastX:p.x+.5,lastY:p.y+.5,
+   phase:rand()*TWO,
+   attack:0,
+   size:1.45
+  });
+ }
+}
+
+function spawnWorld(name){
+ level=name;
+ makeWorld();
+
+ player.x=2.5;
+ player.y=2.5;
+ player.angle=0;
+
+ spawnFurniture();
+ spawnDoors();
+ spawnItems();
+ spawnMonster();
+
+ if(!visitedLevels.includes(name)){
+  visitedLevels.push(name);
+  taskProgress("levels",1);
+ }
+
+ $("level").textContent=name;
+ msg("LOCATION: "+name,4);
+}
+
+/* =========================================================
+   RENDERER
+   ========================================================= */
+
+const image=new ImageData(W,H);
+const pixels=image.data;
+const depthBuffer=new Float32Array(W);
+
+function colorRGB(c){
+ return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+function shade(c,s){
+ return[
+  Math.floor(clamp(c[0]*s,0,255)),
+  Math.floor(clamp(c[1]*s,0,255)),
+  Math.floor(clamp(c[2]*s,0,255))
+ ];
+}
+
+function putPixel(x,y,r,g,b){
+ const i=(y*W+x)*4;
+ pixels[i]=r;
+ pixels[i+1]=g;
+ pixels[i+2]=b;
+ pixels[i+3]=255;
+}
+
+function renderBackground(){
+ const c=levelColors[level];
+ for(let y=0;y<H;y++){
+  for(let x=0;x<W;x++){
+   let t=y/H;
+   let col;
+   if(y<H/2){
+    col=c.ceiling;
+    let shadeV=1-t*.7;
+    col=shade(col,shadeV);
+   }else{
+    col=c.floor;
+    let shadeV=(y-H/2)/H;
+    col=shade(col,.45+shadeV*1.2);
+   }
+   putPixel(x,y,col[0],col[1],col[2]);
   }
  }
 }
 
-function findOpen(min=3,used=[]){
- const options=[];
- for(let z=-HALF+1;z<HALF;z++)for(let x=-HALF+1;x<HALF;x++){
-  if(cell(x,z)&&Math.hypot(x,z)>=min&&!used.some(p=>Math.hypot(p.x-x,p.z-z)<4))options.push({x,z});
+function castRay(angle){
+ let dx=Math.cos(angle),dy=Math.sin(angle);
+ let x=Math.floor(player.x),y=Math.floor(player.y);
+ let deltaX=Math.abs(1/dx),deltaY=Math.abs(1/dy);
+ let stepX=dx<0?-1:1,stepY=dy<0?-1:1;
+ let sideX=dx<0?(player.x-x)*deltaX:(x+1-player.x)*deltaX;
+ let sideY=dy<0?(player.y-y)*deltaY:(y+1-player.y)*deltaY;
+ let side=0;
+ let hit=0;
+
+ for(let i=0;i<90;i++){
+  if(sideX<sideY){sideX+=deltaX;x+=stepX;side=0;}
+  else{sideY+=deltaY;y+=stepY;side=1;}
+
+  hit=cell(x,y);
+  if(hit!==0)break;
  }
- return options.length?options[Math.floor(rand()*options.length)]:{x:5,z:5};
+
+ let distance=side===0?sideX-deltaX:sideY-deltaY;
+ distance=Math.max(.01,distance);
+ return {distance,hit,x,y,side};
 }
 
-function addDoor(name,x,z,color=0xffd45a){
- const p=world(x,z),g=new THREE.Group();
- g.position.set(p.x,0,p.z);
- const frame=new THREE.Mesh(new THREE.BoxGeometry(1.9,2.9,.25),new THREE.MeshStandardMaterial({color}));
- frame.position.y=1.45;
- const hole=new THREE.Mesh(new THREE.BoxGeometry(1.4,2.4,.3),new THREE.MeshBasicMaterial({color:0x080808}));
- hole.position.set(0,1.2,-.02);
- const light=new THREE.PointLight(color,2,7);
- light.position.set(0,2,1);
- g.add(frame,hole,light);
- scene.add(g);
- doors.push({name,x:p.x,z:p.z,group:g});
+function renderWorld(){
+ renderBackground();
+
+ const c=levelColors[level];
+ const fov=PI/2.2;
+
+ for(let x=0;x<W;x++){
+  let rayAngle=player.angle-fov/2+(x/W)*fov;
+  const hit=castRay(rayAngle);
+  let d=hit.distance*Math.cos(rayAngle-player.angle);
+  depthBuffer[x]=d;
+
+  let wallHeight=Math.floor(H/d);
+  let top=Math.floor(H/2-wallHeight/2);
+  let bottom=Math.floor(H/2+wallHeight/2);
+
+  top=clamp(top,0,H);
+  bottom=clamp(bottom,0,H);
+
+  let base=c.wall;
+
+  if(hit.hit===2)base=[150,115,55];
+  if(hit.hit===3)base=[90,83,65];
+  if(hit.hit===4)base=[80,140,180];
+
+  // Texture patterns.
+  const tex=hit.side===0?hit.y:hit.x;
+  let texture=(tex%1);
+  let pattern=Math.floor(texture*8);
+  let textureShade=pattern%2===0?.88:1;
+
+  // Distance lighting.
+  let light=1/(1+d*.14);
+  light*=c.brightness;
+  light*=hit.side===1?.72:1;
+  light*=textureShade;
+
+  if(level==="LEVEL 0"){
+   light*=.85+Math.sin((hit.x+hit.y)*3)*.07;
+  }
+
+  if(level==="LEVEL !"){
+   light*=.7+Math.random()*.1;
+  }
+
+  if(level==="POOL ROOMS"){
+   light*=.9+Math.sin(tex*18)*.1;
+  }
+
+  light*=1-lightFlicker*.4;
+  light=clamp(light,.12,1);
+
+  let col=shade(base,light);
+
+  for(let y=top;y<bottom;y++){
+   let stripe=(Math.floor(y/3)%2===0)?.97:1;
+   putPixel(x,y,col[0]*stripe,col[1]*stripe,col[2]*stripe);
+  }
+
+  // Floor shadow and perspective.
+  for(let y=bottom;y<H;y++){
+   const distanceFloor=H/(2*y-H+1);
+   let s=clamp((1/(distanceFloor*.15+1))*.8,.15,.8);
+   const floor=shade(c.floor,s);
+   putPixel(x,y,floor[0],floor[1],floor[2]);
+  }
+
+  // Ceiling.
+  for(let y=0;y<top;y++){
+   const ce=shade(c.ceiling,clamp(light*.75,.1,.8));
+   putPixel(x,y,ce[0],ce[1],ce[2]);
+  }
+ }
+
+ drawSprites();
+ applyFog();
+ ctx.putImageData(image,0,0);
 }
 
-function addMonster(x,z){
- const p=world(x,z),g=new THREE.Group();
- const body=new THREE.Mesh(new THREE.BoxGeometry(.8,2.1,.65),mats.entity);
- body.position.y=1.1;
- g.add(body);
- for(let i=0;i<2;i++){
-  const eye=new THREE.Mesh(new THREE.BoxGeometry(.13,.13,.08),mats.eye);
-  eye.position.set(i===0?-.19:.19,1.65,.34);
-  g.add(eye);
+function applyFog(){
+ const fog=levelColors[level].fog;
+ for(let y=0;y<H;y++){
+  for(let x=0;x<W;x++){
+   let d=depthBuffer[x];
+   let fogAmt=clamp(d/20,0,.9);
+   const i=(y*W+x)*4;
+   pixels[i]=pixels[i]*(1-fogAmt)+fog[0]*fogAmt;
+   pixels[i+1]=pixels[i+1]*(1-fogAmt)+fog[1]*fogAmt;
+   pixels[i+2]=pixels[i+2]*(1-fogAmt)+fog[2]*fogAmt;
+  }
  }
- g.position.set(p.x,0,p.z);
- scene.add(g);
- monsters.push({group:g,speed:1.1+rand()*.7,phase:rand()*10});
 }
 
-function spawnWater(){
- waters=[];
- for(let i=0;i<5;i++){
-  const p=findOpen(3,[]);
-  const g=new THREE.Group();
-  const bottle=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,.48,6),new THREE.MeshStandardMaterial({color:0x9bd8ed,transparent:true,opacity:.9}));
-  const cap=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,.08,6),new THREE.MeshStandardMaterial({color:0xffffff}));
-  cap.position.y=.28;
-  const label=new THREE.Mesh(new THREE.BoxGeometry(.27,.15,.14),new THREE.MeshBasicMaterial({color:0xffffff}));
-  label.position.z=.1;
-  g.add(bottle,cap,label);
-  const pos=world(p.x,p.z);
-  g.position.set(pos.x,.65,pos.z);
-  g.add(new THREE.PointLight(0x69caff,.7,4));
-  scene.add(g);
-  waters.push(g);
+/* =========================================================
+   SPRITE PROJECTION
+   ========================================================= */
+
+function drawSprites(){
+ let sprites=[];
+
+ for(const m of monsters){
+  sprites.push({type:"monster",obj:m,x:m.x,y:m.y});
+ }
+
+ for(const d of doors){
+  sprites.push({type:"door",obj:d,x:d.x+.5,y:d.y+.5});
+ }
+
+ for(const it of items){
+  sprites.push({type:"item",obj:it,x:it.x,y:it.y});
+ }
+
+ for(const f of furniture){
+  sprites.push({type:"furniture",obj:f,x:f.x,y:f.y});
+ }
+
+ sprites.sort((a,b)=>{
+  return dist(player.x,player.y,b.x,b.y)-dist(player.x,player.y,a.x,a.y);
+ });
+
+ for(const s of sprites){
+  const dx=s.x-player.x,dy=s.y-player.y;
+  const distance=Math.hypot(dx,dy);
+  let angle=normalizeAngle(Math.atan2(dy,dx)-player.angle);
+
+  if(Math.abs(angle)>PI/2)continue;
+
+  let screenX=W/2+angle/(PI/2.2)*W;
+  let size=H/distance;
+
+  if(s.type==="monster"){
+   drawMonster(s.obj,screenX,size,distance,angle);
+  }else if(s.type==="door"){
+   drawDoor(s.obj,screenX,size,distance);
+  }else if(s.type==="item"){
+   drawItem(s.obj,screenX,size,distance);
+  }else if(s.type==="furniture"){
+   drawFurniture(s.obj,screenX,size,distance);
+  }
  }
 }
+
+function visibleSprite(x,y,distance,screenX){
+ const column=clamp(Math.floor(screenX),0,W-1);
+ return depthBuffer[column]>distance-.35;
+}
+
+function rect(x,y,w,h,c){
+ ctx.fillStyle=c;
+ ctx.fillRect(Math.floor(x),Math.floor(y),Math.floor(w),Math.floor(h));
+}
+
+function drawMonster(m,sx,size,distance,angle){
+ if(!visibleSprite(m.x,m.y,distance,sx))return;
+
+ let width=size*1.6;
+ let height=size*1.8;
+ let bottom=H/2+height/2;
+ let top=bottom-height;
+
+ if(width>W*1.8)width=W*1.8;
+ let x=sx-width/2;
+
+ // Monster is a large, four-legged creature.
+ // Shadow.
+ rect(x+width*.2,bottom-2,width*.6,3,"#080808");
+
+ // Body.
+ rect(x+width*.15,top+height*.35,width*.7,height*.35,"#100d0c");
+ rect(x+width*.23,top+height*.4,width*.55,height*.23,"#211817");
+
+ // Spine.
+ rect(x+width*.45,top+height*.34,width*.1,height*.4,"#29201c");
+
+ // Head.
+ rect(x+width*.65,top+height*.18,width*.28,height*.26,"#090807");
+ rect(x+width*.62,top+height*.28,width*.33,height*.13,"#120b0b");
+
+ // Jaw.
+ rect(x+width*.72,top+height*.4,width*.22,height*.08,"#000");
+ rect(x+width*.77,top+height*.43,width*.12,height*.06,"#4b1010");
+
+ // Eyes.
+ rect(x+width*.72,top+height*.23,width*.05,height*.04,"#ff0000");
+ rect(x+width*.87,top+height*.23,width*.05,height*.04,"#ff0000");
+
+ // Four legs: two front, two rear.
+ let legW=width*.15,legH=height*.38;
+ let swing=Math.sin(time*9+m.phase)*height*.07;
+
+ // Rear left.
+ rect(x+width*.18,top+height*.62,legW,legH+swing,"#090807");
+ rect(x+width*.15,bottom-legH*.1,legW*1.2,legH*.15,"#040404");
+
+ // Rear right.
+ rect(x+width*.35,top+height*.62,legW,legH-swing,"#090807");
+ rect(x+width*.34,bottom-legH*.1,legW*1.2,legH*.15,"#040404");
+
+ // Front left.
+ rect(x+width*.65,top+height*.55,legW,legH-swing,"#090807");
+ rect(x+width*.62,bottom-legH*.1,legW*1.3,legH*.15,"#040404");
+
+ // Front right.
+ rect(x+width*.82,top+height*.55,legW,legH+swing,"#090807");
+ rect(x+width*.8,bottom-legH*.1,legW*1.3,legH*.15,"#040404");
+
+ // Glowing eyes.
+ rect(x+width*.73,top+height*.24,width*.035,height*.025,"#ff2222");
+ rect(x+width*.88,top+height*.24,width*.035,height*.025,"#ff2222");
+
+ // Extra appendages.
+ rect(x+width*.45,top+height*.5,width*.12,height*.2,"#090807");
+ rect(x+width*.47,top+height*.7,width*.04,height*.16,"#090807");
+
+ // Monster darkness.
+ if(distance>4){
+  const darkness=clamp(distance/15,.3,1);
+  ctx.globalAlpha=darkness;
+  rect(x,top,width,height,"rgba(0,0,0,.15)");
+  ctx.globalAlpha=1;
+ }
+}
+
+function drawDoor(d,sx,size,distance){
+ if(!visibleSprite(d.x+.5,d.y+.5,distance,sx))return;
+ let w=size*.75,h=size*1.4;
+ let x=sx-w/2,y=H/2-h/2;
+ rect(x,y,w,h,"#392d20");
+ rect(x+w*.1,y+h*.1,w*.8,h*.8,"#070707");
+ rect(x+w*.15,y+h*.1,w*.7,h*.8,"#45332a");
+ rect(x+w*.2,y+h*.15,w*.6,h*.7,"#080808");
+ rect(x+w*.85,y+h*.45,w*.05,h*.08,"#c9a66a");
+}
+
+function drawItem(it,sx,size,distance){
+ if(!visibleSprite(it.x,it.y,distance,sx))return;
+ let h=size*.38,w=h*.4;
+ let y=H/2+h/2;
+ let x=sx-w/2;
+ rect(x,y-h,w,h,"#7fc3dc");
+ rect(x+w*.2,y-h*.8,w*.6,h*.65,"#c1e6ef");
+ rect(x+w*.15,y-h*.3,w*.7,h*.1,"#fff");
+ rect(x+w*.3,y-h*1.05,w*.4,h*.2,"#ddd");
+}
+
+function drawFurniture(f,sx,size,distance){
+ if(!visibleSprite(f.x,f.y,distance,sx))return;
+ const w=size*.7,h=size*.35;
+ let x=sx-w/2,y=H/2+h/2;
+
+ switch(f.type){
+  case 0: // desk
+   rect(x,y-h,w,h*.6,"#46372b");
+   rect(x+w*.1,y-h*.1,w*.8,h*.3,"#67513d");
+   rect(x+w*.15,y-h*.1,w*.1,h*.7,"#25201b");
+   rect(x+w*.75,y-h*.1,w*.1,h*.7,"#25201b");
+   break;
+  case 1: // cabinet
+   rect(x,y-h*1.4,w,h*1.4,"#6e695e");
+   rect(x+w*.1,y-h*1.2,w*.8,h*.4,"#555148");
+   rect(x+w*.1,y-h*.7,w*.8,h*.4,"#555148");
+   break;
+  case 2: // couch
+   rect(x,y-h,w,h*.6,"#55584d");
+   rect(x+w*.05,y-h*1.4,w*.9,h*.4,"#73786b");
+   rect(x,y-h*.8,w*.12,h*.8,"#30352c");
+   rect(x+w*.88,y-h*.8,w*.12,h*.8,"#30352c");
+   break;
+  case 3: // shelves
+   rect(x,y-h*1.5,w,h*1.5,"#594b38");
+   rect(x,y-h*1.3,w,h*.1,"#32291e");
+   rect(x,y-h*.8,w,h*.1,"#32291e");
+   rect(x,y-h*.3,w,h*.1,"#32291e");
+   break;
+  case 4: // chair
+   rect(x+w*.2,y-h,w*.6,h*.5,"#42382b");
+   rect(x+w*.25,y-h*1.5,w*.5,h*.6,"#61513d");
+   rect(x+w*.15,y-h*.5,w*.1,h*.5,"#27201b");
+   rect(x+w*.75,y-h*.5,w*.1,h*.5,"#27201b");
+   break;
+  default: // boxes
+   rect(x,y-h,w,h,"#766149");
+   rect(x+w*.2,y-h,w*.6,h,"#63503c");
+   break;
+ }
+}
+
+/* =========================================================
+   MONSTER AI
+   ========================================================= */
+
+function lineOfSight(x1,y1,x2,y2){
+ const steps=Math.ceil(dist(x1,y1,x2,y2)*8);
+ for(let i=1;i<steps;i++){
+  const t=i/steps;
+  const x=x1+(x2-x1)*t;
+  const y=y1+(y2-y1)*t;
+  if(cell(Math.floor(x),Math.floor(y))===1)return false;
+ }
+ return true;
+}
+
+function updateMonster(dt){
+ monsterVisible=false;
+ monsterDistance=999;
+
+ for(const m of monsters){
+  const d=dist(player.x,player.y,m.x,m.y);
+  monsterDistance=Math.min(monsterDistance,d);
+
+  const angleToPlayer=Math.atan2(player.y-m.y,player.x-m.x);
+  const see=lineOfSight(m.x,m.y,player.x,player.y);
+
+  const visible=see&&d<16&&Math.abs(normalizeAngle(angleToPlayer-m.angle))<1.65;
+
+  if(visible){
+   m.seen=true;
+   m.search=4;
+   m.lastX=player.x;
+   m.lastY=player.y;
+   monsterVisible=true;
+  }else{
+   m.search=Math.max(0,m.search-dt);
+  }
+
+  let speed=visible?3.9:m.search>0?2.0:1.1;
+
+  if(visible){
+   m.angle=angleToPlayer;
+  }else if(m.search>0){
+   m.angle=Math.atan2(m.lastY-m.y,m.lastX-m.x);
+  }else{
+   m.angle+=Math.sin(time*.8+m.phase)*dt*.3;
+  }
+
+  let targetX=m.x+Math.cos(m.angle)*speed*dt;
+  let targetY=m.y+Math.sin(m.angle)*speed*dt;
+
+  if(cell(Math.floor(targetX),Math.floor(m.y))===0)m.x=targetX;
+  else if(!visible)m.angle+=rand()*1.5;
+
+  if(cell(Math.floor(m.x),Math.floor(targetY))===0)m.y=targetY;
+  else if(!visible)m.angle-=rand()*1.5;
+
+  if(d<.8&&time-lastHit>1.2){
+   lastHit=time;
+   player.health=Math.max(0,player.health-15);
+   player.sanity=Math.max(0,player.sanity-12);
+   damageFlash=1;
+   msg("THE CREATURE FOUND YOU.",2);
+   updateHUD();
+
+   if(player.health<=0){
+    endGame();
+   }
+  }
+ }
+}
+
+function updateHUD(){
+ $("health").style.width=player.health+"%";
+ $("sanity").style.width=player.sanity+"%";
+ $("water").textContent=player.water;
+
+ $("health").style.background=player.health<30?"#ff2222":"#4cc477";
+ $("sanity").style.background=player.sanity<30?"#ff00ff":"#ad69df";
+}
+
+/* =========================================================
+   ITEMS AND TASKS
+   ========================================================= */
 
 const taskPool=[
  {name:"Collect 3 Almond Water bottles",type:"water",goal:3},
- {name:"Explore 5 different areas",type:"explore",goal:5},
- {name:"Survive for 120 seconds",type:"survive",goal:120},
- {name:"Find an exit door",type:"door",goal:1},
- {name:"Discover 3 different levels",type:"levels",goal:3},
- {name:"Collect 5 Almond Water bottles",type:"water",goal:5}
+ {name:"Explore 10 rooms",type:"explore",goal:10},
+ {name:"Survive 2 minutes",type:"survive",goal:120},
+ {name:"Find an exit",type:"door",goal:1},
+ {name:"Discover 3 levels",type:"levels",goal:3},
+ {name:"Collect 5 Almond Water bottles",type:"water",goal:5},
+ {name:"Explore 15 rooms",type:"explore",goal:15},
+ {name:"Survive 5 minutes",type:"survive",goal:300}
 ];
 
 function generateTasks(){
- const pool=[...taskPool].sort(()=>rand()-.5);
- objectives=pool.slice(0,3).map(t=>({...t,progress:0,done:false}));
+ objectives=[...taskPool].sort(()=>rand()-.5).slice(0,3).map(t=>({...t,progress:0,done:false}));
  updateTasks();
 }
 
-function progressTask(type,amount=1){
+function taskProgress(type,amount=1){
  for(const t of objectives){
   if(t.type===type&&!t.done){
    t.progress=Math.min(t.goal,t.progress+amount);
    if(t.progress>=t.goal){
     t.done=true;
-    sanity=Math.min(100,sanity+10);
-    $("message").textContent="OBJECTIVE COMPLETED: "+t.name;
+    player.sanity=Math.min(100,player.sanity+15);
+    msg("OBJECTIVE COMPLETE: "+t.name,4);
    }
   }
  }
@@ -256,291 +874,347 @@ function progressTask(type,amount=1){
 }
 
 function updateTasks(){
- $("tasks").innerHTML="<b>ACTIVE OBJECTIVES</b><br>"+
- objectives.map(t=>(t.done?"[COMPLETE] ":"[ ] ")+t.name+
- " ("+Math.floor(t.progress)+"/"+t.goal+")").join("<br>");
+ $("tasks").innerHTML="<b>OBJECTIVES</b><br>"+
+ objectives.map(t=>(t.done?"[X] ":"[ ] ")+t.name+" "+
+ Math.floor(t.progress)+"/"+t.goal).join("<br>");
 }
 
-function updateHUD(){
- $("healthBar").style.width=health+"%";
- $("sanityBar").style.width=sanity+"%";
- $("healthBar").style.background=health<30?"#e44":"#55c77c";
- $("sanityBar").style.background=sanity<30?"#b65cff":"#80d89a";
- $("waterCount").textContent=waterCount;
+function collectItems(){
+ for(let i=items.length-1;i>=0;i--){
+  const it=items[i];
+  if(dist(player.x,player.y,it.x,it.y)<.65){
+   player.water++;
+   items.splice(i,1);
+   msg("ALMOND WATER ACQUIRED",2);
+  }
+ }
 }
 
-function buildWorld(name){
- clearWorld();
- levelName=name;
- const info=levels[name];
- scene.background=new THREE.Color(info.fog);
- scene.fog=new THREE.FogExp2(info.fog,name==="POOL ROOMS"?.025:.035);
- generateMaze();
-
- box(0,-.2,0,SIZE*TILE,.4,SIZE*TILE,info.floor);
- box(0,3.2,0,SIZE*TILE,.3,SIZE*TILE,info.ceil);
-
- for(let z=-HALF;z<=HALF;z++)for(let x=-HALF;x<=HALF;x++){
-  if(!cell(x,z)){
-   const p=world(x,z);
-   box(p.x,1.5,p.z,TILE,3,TILE,info.wall);
-  }
- }
-
- if(name==="POOL ROOMS"){
-  for(let i=0;i<7;i++){
-   const x=(rand()-.5)*65,z=(rand()-.5)*65;
-   const water=new THREE.Mesh(new THREE.BoxGeometry(5,.12,5),new THREE.MeshStandardMaterial({color:0x168db2,transparent:true,opacity:.7}));
-   water.position.set(x,.02,z);
-   scene.add(water);
-  }
- }
-
- if(name==="OFFICES"||name==="PARKING GARAGE"){
-  for(let i=0;i<16;i++){
-   const x=(rand()-.5)*65,z=(rand()-.5)*65;
-   if(name==="OFFICES"){
-    box(x,.65,z,2,.15,1,mats.concrete);
-    box(x,.3,z,1.8,.5,.8,mats.black);
-   }else box(x,1.5,z,.7,3,.7,mats.black);
-  }
- }
-
- if(name==="PIPES"){
-  for(let i=0;i<15;i++){
-   const pipe=new THREE.Mesh(new THREE.CylinderGeometry(.15,.15,9,6),mats.pipe);
-   pipe.rotation.z=Math.PI/2;
-   pipe.position.set((rand()-.5)*65,2.5,(rand()-.5)*65);
-   scene.add(pipe);
-  }
- }
-
- if(name==="PARTY ROOMS"){
-  for(let i=0;i<16;i++){
-   const balloon=new THREE.Mesh(new THREE.SphereGeometry(.28,6,5),new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(rand(),.8,.6)}));
-   balloon.position.set((rand()-.5)*65,2,(rand()-.5)*65);
-   scene.add(balloon);
-  }
- }
-
- const used=[];
- if(name==="LEVEL 0"){
-  ["OFFICES","PARKING GARAGE","PIPES","LEVEL !"].forEach((n,i)=>{
-   const p=findOpen(5,used);used.push(p);
-   addDoor(n,p.x,p.z,[0x6ac9ff,0xffcc66,0x75ffb2,0xff2222][i]);
-  });
- }else{
-  const p=findOpen(4,used);used.push(p);
-  addDoor("LEVEL 0",p.x,p.z,0xffdf70);
-  const q=findOpen(5,used);used.push(q);
-  addDoor("POOL ROOMS",q.x,q.z,0x39cfff);
-  const r=findOpen(5,used);
-  addDoor("PARTY ROOMS",r.x,r.z,0xff55bb);
- }
-
- const count=name==="LEVEL !"?7:name==="POOL ROOMS"?3:4;
- for(let i=0;i<count;i++){
-  const p=findOpen(7,[]);
-  addMonster(p.x,p.z);
- }
-
- spawnWater();
- camera.position.set(0,1.65,0);
- yaw=0;pitch=0;
- mainLight.position.set(0,2.8,0);
- mainLight.intensity=name==="LEVEL !"?1.1:2;
- $("level").textContent=name;
- $("stats").textContent="SIGNAL: UNSTABLE | ENTITIES: "+count;
- $("prompt").textContent="";
-}
-
-function collectWater(){
- for(let i=waters.length-1;i>=0;i--){
-  const b=waters[i];
-  if(Math.hypot(camera.position.x-b.position.x,camera.position.z-b.position.z)<1.4){
-   sanity=Math.min(100,sanity+35);
-   scene.remove(b);
-   waters.splice(i,1);
-   waterCount++;
-   progressTask("water");
-   $("message").textContent="ALMOND WATER COLLECTED: +35 SANITY";
-   updateHUD();
-  }
- }
+function drink(){
+ if(player.water<=0){msg("NO ALMOND WATER.",1);return}
+ if(time-lastDrink<.5)return;
+ lastDrink=time;
+ player.water--;
+ player.sanity=Math.min(100,player.sanity+35);
+ player.health=Math.min(100,player.health+5);
+ msg("ALMOND WATER: SANITY RESTORED",3);
+ updateHUD();
 }
 
 function updateSanity(dt){
- sanity=Math.max(0,sanity-dt*.13);
- const low=sanity<30;
- $("noise").style.opacity=low?String(.15+rand()*.25):"0";
- camera.fov=low?75+Math.sin(performance.now()*.008)*3:75;
- camera.updateProjectionMatrix();
- if(sanity<=0){
-  $("stats").textContent="SANITY DEPLETED";
-  $("noise").style.opacity=".5";
+ player.sanity=Math.max(0,player.sanity-dt*.12);
+
+ if(player.sanity<40){
+  $("noise").style.opacity=String(.15+rand()*.3);
+  $("status").textContent="SIGNAL: DISTORTED";
+ }else{
+  $("noise").style.opacity="0";
+  $("status").textContent="SIGNAL: "+(monsterVisible?"ENTITY DETECTED":"UNSTABLE");
  }
+
+ if(player.sanity<20){
+  $("noise").style.opacity=String(.35+rand()*.35);
+  if(rand()<.01)msg("YOU HEAR SOMETHING.",2);
+ }
+
  updateHUD();
 }
 
-function canMove(x,z){
- const gx=Math.round(x/TILE),gz=Math.round(z/TILE);
- return cell(gx,gz);
-}
+/* =========================================================
+   PLAYER
+   ========================================================= */
 
 function movePlayer(dt){
- const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
- const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
- const dir=new THREE.Vector3();
- if(keys.KeyW)dir.add(forward);
- if(keys.KeyS)dir.sub(forward);
- if(keys.KeyD)dir.add(right);
- if(keys.KeyA)dir.sub(right);
- if(!dir.lengthSq())return;
- dir.normalize();
- const speed=keys.ShiftLeft||keys.ShiftRight?7:4.2;
- const step=dir.multiplyScalar(speed*dt);
- const nx=camera.position.x+step.x,nz=camera.position.z+step.z;
- if(canMove(nx,camera.position.z))camera.position.x=nx;
- if(canMove(camera.position.x,nz))camera.position.z=nz;
+ let dx=0,dy=0;
+ let forward=keys.KeyW||keys.ArrowUp;
+ let backward=keys.KeyS||keys.ArrowDown;
+ let left=keys.KeyA||keys.ArrowLeft;
+ let right=keys.KeyD||keys.ArrowRight;
 
- const c=Math.round(camera.position.x/TILE)+","+Math.round(camera.position.z/TILE);
- if(c!==lastCell){
-  lastCell=c;
-  if(!explored.has(c)){
-   explored.add(c);
-   progressTask("explore");
+ if(forward){dx+=Math.cos(player.angle);dy+=Math.sin(player.angle)}
+ if(backward){dx-=Math.cos(player.angle);dy-=Math.sin(player.angle)}
+ if(left){dx+=Math.cos(player.angle-PI/2);dy+=Math.sin(player.angle-PI/2)}
+ if(right){dx+=Math.cos(player.angle+PI/2);dy+=Math.sin(player.angle+PI/2)}
+
+ moving=dx!==0||dy!==0;
+
+ if(!moving)return;
+
+ const length=Math.hypot(dx,dy);
+ dx/=length;dy/=length;
+
+ const speed=keys.ShiftLeft||keys.ShiftRight?player.run:player.speed;
+ const nx=player.x+dx*speed*dt;
+ const ny=player.y+dy*speed*dt;
+
+ if(cell(Math.floor(nx),Math.floor(player.y))===0)player.x=nx;
+ if(cell(Math.floor(player.x),Math.floor(ny))===0)player.y=ny;
+
+ const cx=Math.floor(player.x),cy=Math.floor(player.y);
+ const current=cx+","+cy;
+
+ if(current!==cellTracker){
+  cellTracker=current;
+  if(!explored[cy][cx]){
+   explored[cy][cx]=true;
+   cellsVisited++;
+   taskProgress("explore");
   }
  }
+
+ if(Math.floor(player.x)>=0&&Math.floor(player.y)>=0&&Math.floor(player.x)<WMAP&&Math.floor(player.y)<HMAP){
+  explored[Math.floor(player.y)][Math.floor(player.x)]=true;
+ }
+
+ footsteps+=dt;
 }
 
 function updateDoors(){
- doorNear=null;
- let closest=2.5;
+ activeDoor=null;
+ let nearest=1.5;
+
  for(const d of doors){
-  const dist=Math.hypot(camera.position.x-d.x,camera.position.z-d.z);
-  if(dist<closest){closest=dist;doorNear=d}
+  const dd=dist(player.x,player.y,d.x+.5,d.y+.5);
+  if(dd<nearest){nearest=dd;activeDoor=d}
  }
- $("prompt").textContent=doorNear?"[ E ] ENTER "+doorNear.name:"";
+
+ $("prompt").textContent=activeDoor?"[ E ] ENTER "+activeDoor.destination:"";
 }
 
-function interact(){
- if(!doorNear)return;
- const destination=doorNear.name;
- progressTask("door");
- if(!explored.has("LEVEL:"+destination)){
-  explored.add("LEVEL:"+destination);
-  progressTask("levels");
- }
- buildWorld(destination);
+function enterDoor(){
+ if(!activeDoor)return;
+ const d=activeDoor.destination;
+ taskProgress("door");
+ spawnWorld(d);
 }
 
-function updateMonsters(dt){
- const now=performance.now()/1000;
+/* =========================================================
+   MINI MAP
+   ========================================================= */
+
+function drawMap(){
+ mapCtx.fillStyle="#000";
+ mapCtx.fillRect(0,0,130,130);
+
+ const scale=4;
+ const ox=65-player.x*scale;
+ const oy=65-player.y*scale;
+
+ for(let y=0;y<HMAP;y++)for(let x=0;x<WMAP;x++){
+  if(!explored[y][x])continue;
+  mapCtx.fillStyle=cell(x,y)===1?"#555":"#b6b6b6";
+  mapCtx.fillRect(x*scale+ox,y*scale+oy,scale,scale);
+ }
+
+ for(const d of doors){
+  mapCtx.fillStyle="#ffe500";
+  mapCtx.fillRect((d.x+.5)*scale+ox,(d.y+.5)*scale+oy,scale,scale);
+ }
+
  for(const m of monsters){
-  const p=m.group.position;
-  const dx=camera.position.x-p.x,dz=camera.position.z-p.z;
-  const dist=Math.hypot(dx,dz);
-  if(dist<18){
-   const speed=m.speed*(dist<5?1.4:1);
-   const nx=p.x+dx/dist*speed*dt;
-   const nz=p.z+dz/dist*speed*dt;
-   if(canMove(nx,nz)){p.x=nx;p.z=nz}
-   m.group.rotation.y=Math.atan2(dx,dz);
-  }
-  m.group.position.y=Math.sin(now*2+m.phase)*.07;
-  if(dist<1.25&&now-lastHit>1.5){
-   lastHit=now;
-   health=Math.max(0,health-12);
-   sanity=Math.max(0,sanity-8);
-   $("damage").style.opacity=".45";
-   setTimeout(()=>$("damage").style.opacity="0",130);
-   $("stats").textContent="ENTITY CONTACT";
-   updateHUD();
-   if(health<=0)gameOver();
-  }
+  mapCtx.fillStyle="#f00";
+  mapCtx.fillRect(m.x*scale+ox-2,m.y*scale+oy-2,4,4);
+ }
+
+ mapCtx.fillStyle="#0f0";
+ mapCtx.fillRect(player.x*scale+ox-2,player.y*scale+oy-2,4,4);
+}
+
+/* =========================================================
+   AUDIO
+   ========================================================= */
+
+let audioCtx=null;
+let soundEnabled=true;
+let ambientOsc=null;
+
+function initAudio(){
+ if(!audioCtx){
+  try{
+   audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+   startAmbient();
+  }catch(e){}
  }
 }
 
-function gameOver(){
+function sound(freq,duration,volume=.08,type="sine"){
+ if(!audioCtx||!soundEnabled)return;
+ const osc=audioCtx.createOscillator();
+ const gain=audioCtx.createGain();
+ osc.type=type;
+ osc.frequency.value=freq;
+ gain.gain.value=volume;
+ osc.connect(gain);
+ gain.connect(audioCtx.destination);
+ osc.start();
+ gain.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+duration);
+ osc.stop(audioCtx.currentTime+duration);
+}
+
+function startAmbient(){
+ if(!audioCtx)return;
+ const osc=audioCtx.createOscillator();
+ const gain=audioCtx.createGain();
+ osc.type="sawtooth";
+ osc.frequency.value=48;
+ gain.gain.value=.015;
+ osc.connect(gain);
+ gain.connect(audioCtx.destination);
+ osc.start();
+ ambientOsc={osc,gain};
+}
+
+function stopAmbient(){
+ if(ambientOsc){
+  try{ambientOsc.osc.stop()}catch(e){}
+  ambientOsc=null;
+ }
+}
+
+function monsterSound(){
+ if(!audioCtx||!soundEnabled)return;
+ sound(55+rand()*15,.5,.08,"sawtooth");
+ sound(95+rand()*30,.3,.05,"square");
+}
+
+/* =========================================================
+   GAME STATE
+   ========================================================= */
+
+function endGame(){
  paused=true;
+ dead=true;
  document.exitPointerLock?.();
  $("overlay").style.display="flex";
- $("message").textContent="SIGNAL LOST. YOUR RUN HAS ENDED.";
- $("start").textContent="TRY AGAIN";
+ $("start").textContent="RESTART";
+ $("message").textContent="SIGNAL LOST. YOU DID NOT ESCAPE.";
 }
 
 function startGame(){
- health=100;
- sanity=100;
- waterCount=0;
- timeAlive=0;
- explored=new Set();
- lastCell="";
- generateTasks();
- updateHUD();
- buildWorld("LEVEL 0");
+ initAudio();
+ stopAmbient();
+ startAmbient();
+
+ player={
+  x:2.5,y:2.5,angle:0,
+  health:100,sanity:100,
+  speed:2.4,run:3.6,
+  water:0
+ };
+
+ time=0;
+ gameTime=0;
+ dead=false;
  paused=false;
- running=true;
+ gameRunning=true;
+ cellsVisited=0;
+ explored=[];
+ visitedLevels=[];
+ lastHit=0;
+ waterCount=0;
+ generateTasks();
+ spawnWorld("LEVEL 0");
+ updateHUD();
+
  $("overlay").style.display="none";
- renderer.domElement.requestPointerLock?.();
+ canvas.requestPointerLock?.();
 }
 
 $("start").onclick=()=>{
- if(running&&paused&&health>0){
+ if(gameRunning&&paused&&!dead){
   paused=false;
   $("overlay").style.display="none";
-  renderer.domElement.requestPointerLock?.();
+  canvas.requestPointerLock?.();
  }else startGame();
 };
 
 document.addEventListener("keydown",e=>{
  keys[e.code]=true;
- if(e.code==="KeyE"&&!paused)interact();
+ if(e.code==="KeyE"&&!paused)enterDoor();
+ if(e.code==="KeyF"&&!paused)drink();
 });
-document.addEventListener("keyup",e=>keys[e.code]=false);
+
+document.addEventListener("keyup",e=>{
+ keys[e.code]=false;
+});
 
 document.addEventListener("mousemove",e=>{
- if(document.pointerLockElement!==renderer.domElement||paused)return;
- yaw-=e.movementX*.002;
- pitch-=e.movementY*.002;
- pitch=Math.max(-1.45,Math.min(1.45,pitch));
- camera.rotation.y=yaw;
- camera.rotation.x=pitch;
+ if(!mouseLocked||paused)return;
+ player.angle+=e.movementX*.003;
 });
 
 document.addEventListener("pointerlockchange",()=>{
- if(!document.pointerLockElement&&running&&!paused){
+ mouseLocked=document.pointerLockElement===canvas;
+ if(!mouseLocked&&gameRunning&&!dead){
   paused=true;
   $("overlay").style.display="flex";
-  $("message").textContent="GAME PAUSED";
   $("start").textContent="RESUME";
+  $("message").textContent="PAUSED";
  }
 });
 
-function animate(){
- requestAnimationFrame(animate);
- const dt=Math.min(clock.getDelta(),.04);
- if(!paused){
-  movePlayer(dt);
-  updateDoors();
-  updateMonsters(dt);
-  collectWater();
-  updateSanity(dt);
-  timeAlive+=dt;
-  progressTask("survive",dt);
-  mainLight.position.x=camera.position.x;
-  mainLight.position.z=camera.position.z;
-  mainLight.intensity=1.7+Math.sin(performance.now()*.008)*.15;
+/* =========================================================
+   MAIN LOOP
+   ========================================================= */
+
+function loop(ts){
+ requestAnimationFrame(loop);
+
+ const dt=Math.min((ts-lastTime)/1000,.05);
+ lastTime=ts;
+ time+=dt;
+
+ if(paused||!gameRunning){
+  renderWorld();
+  return;
  }
- renderer.render(scene,camera);
+
+ gameTime+=dt;
+ movePlayer(dt);
+ updateDoors();
+ collectItems();
+ updateMonster(dt);
+ updateSanity(dt);
+
+ if(damageFlash>0){
+  damageFlash=Math.max(0,damageFlash-dt*2.5);
+  $("flash").style.opacity=damageFlash;
+ }
+
+ if(messageTimer>0){
+  messageTimer-=dt;
+  if(messageTimer<=0)$("message").textContent="";
+ }
+
+ lightFlicker=rand()<.01?.7:0;
+
+ taskProgress("survive",dt);
+
+ if(monsterVisible&&rand()<.005)monsterSound();
+
+ drawMap();
+ renderWorld();
 }
-animate();
 
-addEventListener("resize",()=>{
- camera.aspect=innerWidth/innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
-});
+requestAnimationFrame(loop);
+
+/* =========================================================
+   RESPONSIVE DISPLAY
+   ========================================================= */
+
+function resize(){
+ canvas.style.width="100%";
+ canvas.style.height="100%";
+}
+addEventListener("resize",resize);
+resize();
+
+/* =========================================================
+   FIRST-RUN DISPLAY
+   ========================================================= */
+
+makeWorld();
+renderWorld();
 </script>
 </body>
 </html>

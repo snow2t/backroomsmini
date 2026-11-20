@@ -1,0 +1,1192 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BACKROOMS // LOST SIGNAL</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:white;font-family:monospace}
+#game{position:fixed;inset:0}
+canvas{display:block;image-rendering:pixelated}
+#hud{position:fixed;inset:0;pointer-events:none}
+#top{position:absolute;top:14px;left:14px;text-shadow:2px 2px 3px #000}
+#level{font-size:20px;font-weight:bold;letter-spacing:2px}
+#status{font-size:11px;margin-top:5px}
+#bars{margin-top:8px;font-size:11px}
+.bar{width:170px;height:8px;background:#222;margin:4px 0 8px}
+.fill{height:100%;transition:width .2s}
+#tasks{position:absolute;top:140px;left:14px;font-size:11px;line-height:1.8;text-shadow:2px 2px black}
+#inventory{position:absolute;right:15px;top:15px;text-align:right;text-shadow:2px 2px black;font-size:12px}
+#center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-shadow:1px 1px black}
+#prompt{position:absolute;bottom:20%;width:100%;text-align:center;text-shadow:2px 2px black}
+#help{position:absolute;bottom:8px;left:12px;font-size:10px;text-shadow:2px 2px black}
+#noise{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0;background:repeating-linear-gradient(0deg,transparent 0px,transparent 2px,rgba(255,255,255,.1) 3px,transparent 4px)}
+#flash{position:fixed;inset:0;background:#8b0000;opacity:0;pointer-events:none;z-index:5}
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;z-index:10;text-align:center;padding:20px}
+.panel{max-width:650px;width:100%;background:#090909;border:1px solid #555;padding:30px;box-shadow:0 0 50px #000}
+h1{font-size:clamp(32px,8vw,70px);margin:0;letter-spacing:5px}
+.subtitle{letter-spacing:4px;color:#999;font-size:12px;margin:10px 0 30px}
+button{background:#c7b55e;color:#111;border:0;padding:15px 24px;font-family:monospace;font-weight:bold;cursor:pointer}
+button:hover{background:#fff}
+#message{margin:15px;color:#e3d18b;min-height:22px}
+#intro{color:#aaa;font-size:12px;line-height:2}
+</style>
+</head>
+<body>
+
+<div id="game"></div>
+
+<div id="hud">
+ <div id="top">
+  <div id="level">LEVEL 0</div>
+  <div id="status">SIGNAL: UNKNOWN</div>
+  <div id="bars">
+   HEALTH
+   <div class="bar"><div id="health" class="fill" style="background:#4cc477"></div></div>
+   SANITY
+   <div class="bar"><div id="sanity" class="fill" style="background:#ad69df"></div></div>
+  </div>
+ </div>
+ <div id="tasks"></div>
+ <div id="inventory">ALMOND WATER: <span id="water">0</span></div>
+ <div id="center">+</div>
+ <div id="prompt"></div>
+ <div id="help">WASD MOVE | MOUSE LOOK | SHIFT RUN | E INTERACT | F DRINK | ESC PAUSE</div>
+</div>
+
+<div id="noise"></div>
+<div id="flash"></div>
+
+<div id="overlay">
+ <div class="panel">
+  <h1>BACKROOMS</h1>
+  <div class="subtitle">LOST SIGNAL // VISUAL OVERHAUL</div>
+  <p>THE WORLD IS NOT WHAT IT WAS.</p>
+  <button id="start">ENTER</button>
+  <div id="message">You hear something moving in the walls.</div>
+  <div id="intro">
+   A procedurally generated survival horror experience.<br>
+   Find resources. Complete tasks. Find exits.<br>
+   Do not let the creature see you for too long.<br><br>
+   No maps. No guarantees. No way back.
+  </div>
+ </div>
+</div>
+
+<script>
+"use strict";
+
+const $=id=>document.getElementById(id);
+const game=$("game");
+
+const canvas=document.createElement("canvas");
+game.appendChild(canvas);
+const ctx=canvas.getContext("2d",{alpha:false});
+
+const W=384,H=240;
+canvas.width=W;
+canvas.height=H;
+
+const mapCanvas=document.createElement("canvas");
+mapCanvas.width=130;
+mapCanvas.height=130;
+const mapCtx=mapCanvas.getContext("2d");
+
+const PI=Math.PI,TWO=PI*2;
+const rand=()=>Math.random();
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+let player={x:2.5,y:2.5,angle:0,health:100,sanity:100,speed:2.4,run:3.6,water:0};
+let world=[],WMAP=32,HMAP=32;
+let refreshAnchorX=0,refreshAnchorY=0,worldRefreshes=0;
+let level="LEVEL 0";
+let doors=[],items=[],monsters=[],furniture=[],lights=[];
+let objectives=[],visitedLevels=[],explored=[];
+let time=0,lastTime=0,lastHit=0,damageFlash=0;
+let messageTimer=0,messageText="",activeDoor=null;
+let keys={},mouseLocked=false,paused=true,gameRunning=false,dead=false;
+let gameTime=0,cellsVisited=0,cellTracker="",monsterVisible=false;
+let monsterDistance=999,lightFlicker=0;
+let soundEnabled=true,audioCtx=null,ambientOsc=null;
+
+const colors={
+ "LEVEL 0":{wall:[180,160,83],floor:[108,96,59],ceiling:[145,133,92],fog:[119,108,72],brightness:1},
+ "OFFICES":{wall:[140,146,133],floor:[75,79,75],ceiling:[108,112,105],fog:[75,82,77],brightness:.75},
+ "PARKING GARAGE":{wall:[100,100,103],floor:[70,70,72],ceiling:[55,55,58],fog:[45,45,48],brightness:.55},
+ "PIPES":{wall:[76,103,94],floor:[55,64,61],ceiling:[56,77,72],fog:[36,48,45],brightness:.65},
+ "LEVEL !":{wall:[130,22,25],floor:[65,10,12],ceiling:[75,10,15],fog:[48,5,8],brightness:.55},
+ "POOL ROOMS":{wall:[48,132,158],floor:[33,104,134],ceiling:[70,151,170],fog:[23,74,112],brightness:.85},
+ "PARTY ROOMS":{wall:[155,77,145],floor:[104,77,81],ceiling:[130,82,132],fog:[68,35,70],brightness:.8}
+};
+
+function msg(text,duration=3){
+ messageText=text;
+ messageTimer=duration;
+ $("message").textContent=text;
+}
+
+function normalizeAngle(a){
+ while(a<-PI)a+=TWO;
+ while(a>PI)a-=TWO;
+ return a;
+}
+
+function dist(x,y,a,b){return Math.hypot(x-a,y-b)}
+
+function cell(x,y){
+ if(x<0||y<0||x>=WMAP||y>=HMAP)return 1;
+ return world[y][x];
+}
+
+function setCell(x,y,v){
+ if(x>=0&&y>=0&&x<WMAP&&y<HMAP)world[y][x]=v;
+}
+
+/* =========================================================
+   PROCEDURAL TEXTURE GENERATION
+   ========================================================= */
+
+const textureSize=128;
+
+function createTexture(type){
+ const c=document.createElement("canvas");
+ c.width=textureSize;
+ c.height=textureSize;
+ const t=c.getContext("2d");
+
+ if(type==="wall"){
+  t.fillStyle="#b7a566";
+  t.fillRect(0,0,128,128);
+
+  for(let y=0;y<128;y++){
+   for(let x=0;x<128;x++){
+    const n=rand()*30-15;
+    t.fillStyle=`rgb(${clamp(183+n,0,255)},${clamp(165+n,0,255)},${clamp(105+n,0,255)})`;
+    t.fillRect(x,y,1,1);
+   }
+  }
+
+  for(let y=0;y<128;y+=32){
+   t.strokeStyle="rgba(70,50,20,.25)";
+   t.lineWidth=1;
+   t.beginPath();
+   t.moveTo(0,y);
+   t.lineTo(128,y);
+   t.stroke();
+  }
+
+  // Wallpaper pattern.
+  for(let y=8;y<128;y+=32){
+   for(let x=8;x<128;x+=24){
+    t.strokeStyle="rgba(110,90,40,.3)";
+    t.lineWidth=2;
+    t.beginPath();
+    t.moveTo(x,y);
+    t.lineTo(x+8,y+10);
+    t.lineTo(x,y+20);
+    t.stroke();
+   }
+  }
+
+  // Stains.
+  for(let i=0;i<14;i++){
+   t.fillStyle=`rgba(65,45,20,${rand()*.15})`;
+   t.beginPath();
+   t.ellipse(rand()*128,rand()*128,5+rand()*20,3+rand()*14,rand(),0,TWO);
+   t.fill();
+  }
+ }
+
+ if(type==="carpet"){
+  t.fillStyle="#766943";
+  t.fillRect(0,0,128,128);
+
+  for(let i=0;i<5000;i++){
+   let c=rand()<.5?"#5f563a":"#897951";
+   t.fillStyle=c;
+   t.fillRect(rand()*128,rand()*128,1+rand()*2,1);
+  }
+
+  for(let y=0;y<128;y+=16){
+   t.fillStyle="rgba(0,0,0,.1)";
+   t.fillRect(0,y,128,1);
+  }
+ }
+
+ if(type==="concrete"){
+  t.fillStyle="#777777";
+  t.fillRect(0,0,128,128);
+  for(let i=0;i<5000;i++){
+   const n=Math.floor(rand()*80);
+   t.fillStyle=`rgb(${n+80},${n+80},${n+80})`;
+   t.fillRect(rand()*128,rand()*128,1+rand()*2,1+rand()*2);
+  }
+  t.strokeStyle="rgba(0,0,0,.2)";
+  t.strokeRect(2,2,124,124);
+ }
+
+ if(type==="pool"){
+  t.fillStyle="#2686a6";
+  t.fillRect(0,0,128,128);
+  for(let y=0;y<128;y+=16){
+   for(let x=0;x<128;x+=16){
+    t.strokeStyle="rgba(0,0,0,.3)";
+    t.strokeRect(x,y,16,16);
+    t.fillStyle="rgba(255,255,255,.07)";
+    t.fillRect(x+2,y+2,12,12);
+   }
+  }
+  for(let i=0;i<100;i++){
+   t.fillStyle="rgba(255,255,255,.1)";
+   t.fillRect(rand()*128,rand()*128,4+rand()*10,1);
+  }
+ }
+
+ if(type==="red"){
+  t.fillStyle="#8d171b";
+  t.fillRect(0,0,128,128);
+  for(let i=0;i<1500;i++){
+   t.fillStyle=rand()<.5?"#661013":"#a02a30";
+   t.fillRect(rand()*128,rand()*128,1+rand()*4,1+rand()*4);
+  }
+ }
+
+ if(type==="party"){
+  t.fillStyle="#7b3672";
+  t.fillRect(0,0,128,128);
+  for(let i=0;i<100;i++){
+   t.fillStyle=`hsl(${rand()*360},70%,55%)`;
+   t.fillRect(rand()*128,rand()*128,3+rand()*10,3+rand()*10);
+  }
+ }
+
+ if(type==="office"){
+  t.fillStyle="#8c948b";
+  t.fillRect(0,0,128,128);
+  for(let y=0;y<128;y+=16){
+   t.strokeStyle="rgba(0,0,0,.2)";
+   t.beginPath();
+   t.moveTo(0,y);
+   t.lineTo(128,y);
+   t.stroke();
+  }
+  for(let i=0;i<3000;i++){
+   t.fillStyle=rand()<.5?"#7b837a":"#9da49c";
+   t.fillRect(rand()*128,rand()*128,1,1);
+  }
+ }
+
+ return c;
+}
+
+const textures={
+ wall:createTexture("wall"),
+ carpet:createTexture("carpet"),
+ concrete:createTexture("concrete"),
+ pool:createTexture("pool"),
+ red:createTexture("red"),
+ party:createTexture("party"),
+ office:createTexture("office")
+};
+
+function textureFor(){
+ if(level==="LEVEL 0")return textures.wall;
+ if(level==="OFFICES")return textures.office;
+ if(level==="PARKING GARAGE")return textures.concrete;
+ if(level==="PIPES")return textures.concrete;
+ if(level==="LEVEL !")return textures.red;
+ if(level==="POOL ROOMS")return textures.pool;
+ if(level==="PARTY ROOMS")return textures.party;
+ return textures.wall;
+}
+
+function floorTexture(){
+ if(level==="POOL ROOMS")return textures.pool;
+ if(level==="PARKING GARAGE"||level==="PIPES")return textures.concrete;
+ return textures.carpet;
+}
+
+/* =========================================================
+   WORLD GENERATION
+   ========================================================= */
+
+function makeWorld(){
+ world=Array.from({length:HMAP},()=>Array(WMAP).fill(1));
+ const stack=[[1,1]];
+ setCell(1,1,0);
+
+ while(stack.length){
+  const [x,y]=stack[stack.length-1];
+  const dirs=[[0,-2],[2,0],[0,2],[-2,0]].sort(()=>rand()-.5);
+  let found=false;
+
+  for(const [dx,dy] of dirs){
+   const nx=x+dx,ny=y+dy;
+   if(nx>0&&ny>0&&nx<WMAP-1&&ny<HMAP-1&&cell(nx,ny)===1){
+    setCell(nx,ny,0);
+    setCell(x+dx/2,y+dy/2,0);
+    stack.push([nx,ny]);
+    found=true;
+    break;
+   }
+  }
+  if(!found)stack.pop();
+ }
+
+ for(let i=0;i<40;i++){
+  const rx=2+Math.floor(rand()*(WMAP-5));
+  const ry=2+Math.floor(rand()*(HMAP-5));
+  const rw=2+Math.floor(rand()*4);
+  const rh=2+Math.floor(rand()*4);
+  for(let y=ry;y<ry+rh;y++)for(let x=rx;x<rx+rw;x++){
+   if(x<WMAP-1&&y<HMAP-1)setCell(x,y,0);
+  }
+ }
+
+ for(let y=1;y<6;y++)for(let x=1;x<6;x++)setCell(x,y,0);
+ explored=Array.from({length:HMAP},()=>Array(WMAP).fill(false));
+}
+
+function openCell(){
+ let options=[];
+ for(let y=1;y<HMAP-1;y++)for(let x=1;x<WMAP-1;x++){
+  if(cell(x,y)===0&&dist(x,y,player.x,player.y)>5)options.push({x,y});
+ }
+ return options.length?options[Math.floor(rand()*options.length)]:{x:6,y:6};
+}
+
+function placeDoor(destination,x,y){
+ setCell(x,y,2);
+ doors.push({x,y,destination});
+}
+
+function spawnDoors(){
+ doors=[];
+ if(level==="LEVEL 0"){
+  ["OFFICES","PARKING GARAGE","PIPES","LEVEL !"].forEach(d=>{
+   const p=openCell();
+   placeDoor(d,p.x,p.y);
+  });
+ }else{
+  let p=openCell();placeDoor("LEVEL 0",p.x,p.y);
+  p=openCell();placeDoor("POOL ROOMS",p.x,p.y);
+  p=openCell();placeDoor("PARTY ROOMS",p.x,p.y);
+ }
+}
+
+function spawnFurniture(){
+ furniture=[];
+ const count=level==="LEVEL 0"?90:level==="OFFICES"?110:level==="PARKING GARAGE"?70:level==="PIPES"?55:level==="POOL ROOMS"?45:60;
+
+ for(let i=0;i<count;i++){
+  const p=openCell();
+  furniture.push({
+   x:p.x+.5,y:p.y+.5,
+   type:Math.floor(rand()*9),
+   size:.35+rand()*.6,
+   rotation:rand()*TWO,
+   color:rand()
+  });
+ }
+}
+
+function spawnItems(){
+ items=[];
+ for(let i=0;i<14;i++){
+  const p=openCell();
+  items.push({x:p.x+.5,y:p.y+.5,type:"almond",phase:rand()*TWO});
+ }
+}
+
+function spawnLights(){
+ lights=[];
+ const count=level==="LEVEL 0"?35:30;
+ for(let i=0;i<count;i++){
+  const p=openCell();
+  lights.push({
+   x:p.x+.5,y:p.y+.5,
+   power:rand()*.4+.6,
+   phase:rand()*TWO,
+   flicker:rand()
+  });
+ }
+}
+
+function spawnMonster(){
+ monsters=[];
+ const count=level==="LEVEL !"?2:1;
+ for(let i=0;i<count;i++){
+  const p=openCell();
+  monsters.push({
+   x:p.x+.5,y:p.y+.5,
+   angle:rand()*TWO,
+   speed:2.9,
+   search:0,
+   lastX:p.x+.5,lastY:p.y+.5,
+   phase:rand()*TWO,
+   size:1.6
+  });
+ }
+}
+
+// Rolling procedural window: the active world is a bounded 32x32 region.
+// Once the player reaches its edge, discard the region and build a fresh one.
+function refreshNearbyWorld(){
+ worldRefreshes++;
+ player.x=16.5; player.y=16.5;
+ makeWorld();
+ // Ensure a walkable central landing area after regeneration.
+ for(let y=13;y<=19;y++)for(let x=13;x<=19;x++)setCell(x,y,0);
+ spawnFurniture(); spawnDoors(); spawnItems(); spawnLights(); spawnMonster();
+ explored=Array.from({length:HMAP},()=>Array(WMAP).fill(false));
+ cellTracker="";
+ msg("THE CORRIDORS SHIFTED.",2.5);
+}
+
+function spawnWorld(name){
+ level=name;
+ makeWorld();
+ player.x=2.5;
+ player.y=2.5;
+ player.angle=0;
+ spawnFurniture();
+ spawnDoors();
+ spawnItems();
+ spawnLights();
+ spawnMonster();
+ if(!visitedLevels.includes(name)){
+  visitedLevels.push(name);
+  taskProgress("levels");
+ }
+ $("level").textContent=name;
+ msg("LOCATION: "+name,4);
+}
+
+/* =========================================================
+   DETAILED RAYCASTER
+   ========================================================= */
+
+const image=new ImageData(W,H);
+const pixels=image.data;
+const depthBuffer=new Float32Array(W);
+const columnWall=new Array(W);
+
+function putPixel(x,y,r,g,b){
+ const i=(y*W+x)*4;
+ pixels[i]=r;
+ pixels[i+1]=g;
+ pixels[i+2]=b;
+ pixels[i+3]=255;
+}
+
+function shade(c,s){
+ return[
+  clamp(c[0]*s,0,255),
+  clamp(c[1]*s,0,255),
+  clamp(c[2]*s,0,255)
+ ];
+}
+
+function castRay(angle){
+ const dx=Math.cos(angle),dy=Math.sin(angle);
+ let x=Math.floor(player.x),y=Math.floor(player.y);
+ const deltaX=Math.abs(1/dx),deltaY=Math.abs(1/dy);
+ const stepX=dx<0?-1:1,stepY=dy<0?-1:1;
+ let sideX=dx<0?(player.x-x)*deltaX:(x+1-player.x)*deltaX;
+ let sideY=dy<0?(player.y-y)*deltaY:(y+1-player.y)*deltaY;
+ let side=0,hit=0;
+
+ for(let i=0;i<120;i++){
+  if(sideX<sideY){sideX+=deltaX;x+=stepX;side=0;}
+  else{sideY+=deltaY;y+=stepY;side=1;}
+  hit=cell(x,y);
+  if(hit!==0)break;
+ }
+
+ const d=side===0?sideX-deltaX:sideY-deltaY;
+ let textureX=side===0?player.y+d*dy:player.x+d*dx;
+ textureX-=Math.floor(textureX);
+
+ if(side===0&&dx>0)textureX=1-textureX;
+ if(side===1&&dy<0)textureX=1-textureX;
+
+ return {distance:Math.max(.01,d),hit,x,y,side,textureX};
+}
+
+function renderBackground(){
+ const c=colors[level];
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  let col;
+  if(y<H/2)col=c.ceiling;
+  else col=c.floor;
+  putPixel(x,y,col[0],col[1],col[2]);
+ }
+}
+
+function sampleTexture(tex,u,v){
+ const t=tex.getContext("2d");
+ const data=t.getImageData(
+  clamp(Math.floor(u*128),0,127),
+  clamp(Math.floor(v*128),0,127),1,1
+ ).data;
+ return [data[0],data[1],data[2]];
+}
+
+function renderWorld(){
+ const c=colors[level];
+ renderBackground();
+ const tex=textureFor();
+ const fl=floorTexture();
+
+ const fov=PI/2.1;
+
+ for(let x=0;x<W;x++){
+  const angle=player.angle-fov/2+(x/W)*fov;
+  const hit=castRay(angle);
+  let d=hit.distance*Math.cos(angle-player.angle);
+  d=Math.max(.01,d);
+  depthBuffer[x]=d;
+  columnWall[x]=hit;
+
+  const wallHeight=Math.floor(H/d);
+  const top=clamp(Math.floor(H/2-wallHeight/2),0,H);
+  const bottom=clamp(Math.floor(H/2+wallHeight/2),0,H);
+
+  let light=1/(1+d*.12);
+  light*=c.brightness;
+  light*=hit.side===1?.75:1;
+  light*=1-lightFlicker*.35;
+  light=clamp(light,.12,1);
+
+  for(let y=0;y<H;y++){
+   if(y>=top&&y<bottom){
+    let v=(y-top)/Math.max(1,bottom-top);
+    let texCol=sampleTexture(tex,hit.textureX,v);
+    let stripe=Math.floor(y/3)%2===0?.97:1;
+    const col=shade(texCol,light*stripe);
+    putPixel(x,y,col[0],col[1],col[2]);
+   }else if(y>=bottom){
+    let distFloor=H/(2*y-H+1);
+    let col=sampleTexture(fl,(player.x+Math.cos(angle)*distFloor)%1,(player.y+Math.sin(angle)*distFloor)%1);
+    let s=clamp((1/(distFloor*.15+1))*.8,.15,.8);
+    col=shade(col,s);
+    putPixel(x,y,col[0],col[1],col[2]);
+   }else{
+    let col=shade(c.ceiling,clamp(light*.7,.1,.8));
+    putPixel(x,y,col[0],col[1],col[2]);
+   }
+  }
+ }
+
+ drawSprites();
+ applyFog();
+ ctx.putImageData(image,0,0);
+ drawLighting();
+ drawPixelEffects();
+}
+
+function applyFog(){
+ const fog=colors[level].fog;
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const d=depthBuffer[x];
+  const amt=clamp(d/25,0,.85);
+  const i=(y*W+x)*4;
+  pixels[i]=pixels[i]*(1-amt)+fog[0]*amt;
+  pixels[i+1]=pixels[i+1]*(1-amt)+fog[1]*amt;
+  pixels[i+2]=pixels[i+2]*(1-amt)+fog[2]*amt;
+ }
+}
+
+/* =========================================================
+   SPRITES
+   ========================================================= */
+
+function drawSprites(){
+ const sprites=[];
+ for(const m of monsters)sprites.push({type:"monster",obj:m,x:m.x,y:m.y});
+ for(const d of doors)sprites.push({type:"door",obj:d,x:d.x+.5,y:d.y+.5});
+ for(const it of items)sprites.push({type:"item",obj:it,x:it.x,y:it.y});
+ for(const f of furniture)sprites.push({type:"furniture",obj:f,x:f.x,y:f.y});
+ sprites.sort((a,b)=>dist(player.x,player.y,b.x,b.y)-dist(player.x,player.y,a.x,a.y));
+ for(const s of sprites){
+  const dx=s.x-player.x,dy=s.y-player.y;
+  const distance=Math.hypot(dx,dy);
+  const angle=normalizeAngle(Math.atan2(dy,dx)-player.angle);
+  if(Math.abs(angle)>PI/2)continue;
+  const sx=W/2+angle/(PI/2.1)*W;
+  const size=H/distance;
+  if(s.type==="monster")drawMonster(s.obj,sx,size,distance);
+  if(s.type==="door")drawDoor(s.obj,sx,size,distance);
+  if(s.type==="item")drawItem(s.obj,sx,size,distance);
+  if(s.type==="furniture")drawFurniture(s.obj,sx,size,distance);
+ }
+}
+
+function normalizeAngle(a){
+ while(a<-PI)a+=TWO;
+ while(a>PI)a-=TWO;
+ return a;
+}
+
+function visibleSprite(x,y,distance,sx){
+ const col=clamp(Math.floor(sx),0,W-1);
+ return depthBuffer[col]>distance-.4;
+}
+
+function rect(x,y,w,h,c){
+ ctx.fillStyle=c;
+ ctx.fillRect(Math.floor(x),Math.floor(y),Math.floor(w),Math.floor(h));
+}
+
+function drawMonster(m,sx,size,distance){
+ if(!visibleSprite(m.x,m.y,distance,sx))return;
+ const width=size*2.1;
+ const height=size*2.3;
+ const bottom=H/2+height/2;
+ const top=bottom-height;
+ const x=sx-width/2;
+ const swing=Math.sin(time*10+m.phase)*height*.08;
+
+ // Shadow.
+ rect(x+width*.1,bottom-3,width*.8,4,"#050505");
+
+ // Chest.
+ rect(x+width*.15,top+height*.3,width*.6,height*.4,"#080807");
+ rect(x+width*.2,top+height*.33,width*.55,height*.35,"#171412");
+
+ // Shoulder ridges.
+ rect(x+width*.08,top+height*.34,width*.2,height*.12,"#28211b");
+ rect(x+width*.6,top+height*.34,width*.18,height*.12,"#25201a");
+
+ // Spine.
+ rect(x+width*.43,top+height*.32,width*.12,height*.42,"#30251e");
+ for(let i=0;i<5;i++){
+  rect(x+width*.45,top+height*.34+i*height*.07,width*.08,height*.035,"#060505");
+ }
+
+ // Head.
+ rect(x+width*.58,top+height*.16,width*.32,height*.27,"#090807");
+ rect(x+width*.62,top+height*.24,width*.28,height*.2,"#1a1311");
+ rect(x+width*.72,top+height*.36,width*.18,height*.1,"#000");
+ rect(x+width*.7,top+height*.39,width*.16,height*.04,"#631212");
+
+ // Four animated legs.
+ const legW=width*.13,legH=height*.42;
+
+ // Back pair.
+ rect(x+width*.18,top+height*.6,legW,legH+swing,"#080807");
+ rect(x+width*.16,bottom-legH*.1,legW*1.4,legH*.13,"#020202");
+ rect(x+width*.34,top+height*.6,legW,legH-swing,"#080807");
+ rect(x+width*.34,bottom-legH*.1,legW*1.4,legH*.13,"#020202");
+
+ // Front pair.
+ rect(x+width*.62,top+height*.55,legW,legH-swing,"#080807");
+ rect(x+width*.6,bottom-legH*.1,legW*1.4,legH*.13,"#020202");
+ rect(x+width*.82,top+height*.55,legW,legH+swing,"#080807");
+ rect(x+width*.8,bottom-legH*.1,legW*1.4,legH*.13,"#020202");
+
+ // Glowing eyes.
+ rect(x+width*.69,top+height*.23,width*.04,height*.025,"#ff1111");
+ rect(x+width*.83,top+height*.23,width*.04,height*.025,"#ff1111");
+
+ // Teeth.
+ for(let i=0;i<5;i++){
+  rect(x+width*.68+i*width*.035,top+height*.39,width*.025,height*.045,"#bdb7a6");
+ }
+
+ // Darken the creature at distance.
+ if(distance>4){
+  ctx.fillStyle="rgba(0,0,0,.25)";
+  ctx.fillRect(x,top,width,height);
+ }
+}
+
+function drawDoor(d,sx,size,distance){
+ if(!visibleSprite(d.x+.5,d.y+.5,distance,sx))return;
+ const w=size*.85,h=size*1.5;
+ const x=sx-w/2,y=H/2-h/2;
+ rect(x,y,w,h,"#28221b");
+ rect(x+w*.08,y+h*.05,w*.84,h*.9,"#5a4531");
+ rect(x+w*.15,y+h*.1,w*.7,h*.8,"#080808");
+ rect(x+w*.2,y+h*.15,w*.6,h*.7,"#070707");
+ rect(x+w*.85,y+h*.45,w*.04,h*.1,"#c7a65b");
+}
+
+function drawItem(it,sx,size,distance){
+ if(!visibleSprite(it.x,it.y,distance,sx))return;
+ const h=size*.4,w=h*.42;
+ const y=H/2+h/2,x=sx-w/2;
+ rect(x,y-h,w,h,"#82b5d4");
+ rect(x+w*.2,y-h*.8,w*.6,h*.65,"#d2f0f7");
+ rect(x+w*.15,y-h*.3,w*.7,h*.1,"#fff");
+ rect(x+w*.3,y-h*1.05,w*.4,h*.2,"#ddd");
+ rect(x+w*.4,y-h*.4,w*.2,h*.15,"#4a8ab0");
+}
+
+function drawFurniture(f,sx,size,distance){
+ if(!visibleSprite(f.x,f.y,distance,sx))return;
+ const w=size*.8,h=size*.45;
+ const x=sx-w/2,y=H/2+h/2;
+ switch(f.type){
+  case 0: // desks
+   rect(x,y-h,w,h*.55,"#493a2a");
+   rect(x+w*.08,y-h*.08,w*.84,h*.3,"#756044");
+   rect(x+w*.12,y-h*.08,w*.12,h*.75,"#282019");
+   rect(x+w*.76,y-h*.08,w*.12,h*.75,"#282019");
+   rect(x+w*.2,y-h*.25,w*.4,h*.15,"#39322c");
+   break;
+  case 1: // cabinets
+   rect(x,y-h*1.5,w,h*1.5,"#66665d");
+   rect(x+w*.08,y-h*1.3,w*.84,h*.4,"#494942");
+   rect(x+w*.08,y-h*.8,w*.84,h*.4,"#494942");
+   rect(x+w*.4,y-h*1.2,w*.08,h*.1,"#c0b79b");
+   rect(x+w*.4,y-h*.7,w*.08,h*.1,"#c0b79b");
+   break;
+  case 2: // couch
+   rect(x,y-h,w,h*.6,"#4b5248");
+   rect(x+w*.05,y-h*1.35,w*.9,h*.4,"#71796b");
+   rect(x,y-h*.8,w*.12,h*.8,"#30362b");
+   rect(x+w*.88,y-h*.8,w*.12,h*.8,"#30362b");
+   rect(x+w*.35,y-h*1.2,w*.3,h*.2,"#858c7b");
+   break;
+  case 3: // shelves
+   rect(x,y-h*1.6,w,h*1.6,"#4d3f2d");
+   rect(x,y-h*1.3,w,h*.08,"#32291e");
+   rect(x,y-h*.8,w,h*.08,"#32291e");
+   rect(x,y-h*.3,w,h*.08,"#32291e");
+   rect(x+w*.15,y-h*1.4,w*.2,h*.1,"#898274");
+   rect(x+w*.55,y-h*.9,w*.25,h*.1,"#70634e");
+   break;
+  case 4: // chairs
+   rect(x+w*.2,y-h,w*.6,h*.5,"#42382b");
+   rect(x+w*.25,y-h*1.5,w*.5,h*.6,"#61513d");
+   rect(x+w*.15,y-h*.5,w*.1,h*.5,"#27201b");
+   rect(x+w*.75,y-h*.5,w*.1,h*.5,"#27201b");
+   break;
+  case 5: // boxes
+   rect(x,y-h,w,h,"#766149");
+   rect(x+w*.2,y-h,w*.6,h,"#63503c");
+   rect(x+w*.1,y-h*.4,w*.8,h*.04,"#4d3a29");
+   break;
+  case 6: // filing cabinets
+   rect(x,y-h*1.4,w,h*1.4,"#7b817b");
+   for(let i=0;i<3;i++){
+    rect(x+w*.1,y-h*1.3+i*h*.4,w*.8,h*.3,"#5b625b");
+    rect(x+w*.45,y-h*1.15+i*h*.4,w*.1,h*.08,"#b7b5a5");
+   }
+   break;
+  case 7: // table
+   rect(x,y-h,w,h*.3,"#72553d");
+   rect(x+w*.1,y-h*.1,w*.12,h*.9,"#423326");
+   rect(x+w*.78,y-h*.1,w*.12,h*.9,"#423326");
+   break;
+  default: // vending machine
+   rect(x,y-h*1.6,w,h*1.6,"#303c3b");
+   rect(x+w*.1,y-h*1.5,w*.8,h*1.2,"#57726b");
+   rect(x+w*.1,y-h*.2,w*.8,h*.15,"#101c1a");
+   rect(x+w*.7,y-h*.1,w*.1,h*.1,"#c2a866");
+   break;
+ }
+}
+
+/* =========================================================
+   LIGHTING OVERLAY
+   ========================================================= */
+
+function drawLighting(){
+ const c=colors[level];
+ ctx.save();
+ ctx.globalCompositeOperation="screen";
+
+ for(const l of lights){
+  const dx=l.x-player.x,dy=l.y-player.y;
+  const d=Math.hypot(dx,dy);
+  if(d>12)continue;
+  const angle=normalizeAngle(Math.atan2(dy,dx)-player.angle);
+  if(Math.abs(angle)>PI/2)continue;
+  const sx=W/2+angle/(PI/2.1)*W;
+  const radius=clamp(120/d,15,150);
+  const brightness=l.power*(.5+Math.sin(time*3+l.phase)*.1);
+  const g=ctx.createRadialGradient(sx,H/2,radius*.1,sx,H/2,radius);
+  g.addColorStop(0,`rgba(255,230,160,${brightness*.1})`);
+  g.addColorStop(.5,`rgba(255,220,120,${brightness*.04})`);
+  g.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=g;
+  ctx.fillRect(sx-radius,H/2-radius,radius*2,radius*2);
+ }
+
+ ctx.restore();
+}
+
+function drawPixelEffects(){
+ ctx.save();
+
+ // Pixel vignette.
+ const vignette=ctx.createRadialGradient(W/2,H/2,H*.1,W/2,H/2,H*.7);
+ vignette.addColorStop(0,"rgba(0,0,0,0)");
+ vignette.addColorStop(1,"rgba(0,0,0,.65)");
+ ctx.fillStyle=vignette;
+ ctx.fillRect(0,0,W,H);
+
+ // Scan lines.
+ ctx.fillStyle="rgba(0,0,0,.13)";
+ for(let y=0;y<H;y+=3)ctx.fillRect(0,y,W,1);
+
+ // Random grain.
+ if(player.sanity<35){
+  for(let i=0;i<200;i++){
+   ctx.fillStyle=rand()<.5?"rgba(255,255,255,.05)":"rgba(0,0,0,.05)";
+   ctx.fillRect(rand()*W,rand()*H,2,2);
+  }
+ }
+
+ ctx.restore();
+}
+
+/* =========================================================
+   AI
+   ========================================================= */
+
+function lineOfSight(x1,y1,x2,y2){
+ const steps=Math.ceil(dist(x1,y1,x2,y2)*8);
+ for(let i=1;i<steps;i++){
+  const t=i/steps;
+  const x=x1+(x2-x1)*t,y=y1+(y2-y1)*t;
+  if(cell(Math.floor(x),Math.floor(y))===1)return false;
+ }
+ return true;
+}
+
+function updateMonster(dt){
+ monsterVisible=false;
+ monsterDistance=999;
+
+ for(const m of monsters){
+  const d=dist(player.x,player.y,m.x,m.y);
+  monsterDistance=Math.min(monsterDistance,d);
+  const targetAngle=Math.atan2(player.y-m.y,player.x-m.x);
+  const visible=lineOfSight(m.x,m.y,player.x,player.y)&&d<18&&Math.abs(normalizeAngle(targetAngle-m.angle))<1.8;
+
+  if(visible){
+   m.search=4;
+   m.lastX=player.x;
+   m.lastY=player.y;
+   monsterVisible=true;
+  }else m.search=Math.max(0,m.search-dt);
+
+  const speed=visible?3.9:m.search>0?2.0:1.1;
+  if(visible)m.angle=targetAngle;
+  else if(m.search>0)m.angle=Math.atan2(m.lastY-m.y,m.lastX-m.x);
+  else m.angle+=Math.sin(time*.8+m.phase)*dt*.3;
+
+  const nx=m.x+Math.cos(m.angle)*speed*dt;
+  const ny=m.y+Math.sin(m.angle)*speed*dt;
+
+  if(cell(Math.floor(nx),Math.floor(m.y))===0)m.x=nx;
+  if(cell(Math.floor(m.x),Math.floor(ny))===0)m.y=ny;
+
+  if(d<.8&&time-lastHit>1.2){
+   lastHit=time;
+   player.health=Math.max(0,player.health-15);
+   player.sanity=Math.max(0,player.sanity-12);
+   damageFlash=1;
+   msg("THE CREATURE FOUND YOU.",2);
+   updateHUD();
+   if(player.health<=0)endGame();
+  }
+ }
+}
+
+/* =========================================================
+   MOVEMENT
+   ========================================================= */
+
+function movePlayer(dt){
+ let dx=0,dy=0;
+ if(keys.KeyW||keys.ArrowUp){dx+=Math.cos(player.angle);dy+=Math.sin(player.angle);}
+ if(keys.KeyS||keys.ArrowDown){dx-=Math.cos(player.angle);dy-=Math.sin(player.angle);}
+ if(keys.KeyA||keys.ArrowLeft){dx+=Math.cos(player.angle-PI/2);dy+=Math.sin(player.angle-PI/2);}
+ if(keys.KeyD||keys.ArrowRight){dx+=Math.cos(player.angle+PI/2);dy+=Math.sin(player.angle+PI/2);}
+ if(!dx&&!dy)return;
+
+ const len=Math.hypot(dx,dy);
+ dx/=len;dy/=len;
+ const speed=keys.ShiftLeft||keys.ShiftRight?player.run:player.speed;
+ const nx=player.x+dx*speed*dt;
+ const ny=player.y+dy*speed*dt;
+ if(cell(Math.floor(nx),Math.floor(player.y))===0)player.x=nx;
+ if(cell(Math.floor(player.x),Math.floor(ny))===0)player.y=ny;
+
+ // Crossing the inner boundary rolls the active 32x32 region.
+ if(player.x<3||player.x>29||player.y<3||player.y>29){refreshNearbyWorld();return;}
+ const cx=Math.floor(player.x),cy=Math.floor(player.y);
+ const current=cx+","+cy;
+ if(current!==cellTracker){
+  cellTracker=current;
+  if(!explored[cy][cx]){explored[cy][cx]=true;cellsVisited++;taskProgress("explore");}
+ }
+}
+
+function updateDoors(){
+ activeDoor=null;
+ let nearest=1.5;
+ for(const d of doors){
+  const dd=dist(player.x,player.y,d.x+.5,d.y+.5);
+  if(dd<nearest){nearest=dd;activeDoor=d;}
+ }
+ $("prompt").textContent=activeDoor?"[ E ] ENTER "+activeDoor.destination:"";
+}
+
+function enterDoor(){
+ if(!activeDoor)return;
+ taskProgress("door");
+ spawnWorld(activeDoor.destination);
+}
+
+/* =========================================================
+   TASKS AND ITEMS
+   ========================================================= */
+
+const taskPool=[
+ {name:"Collect 3 Almond Water bottles",type:"water",goal:3},
+ {name:"Explore 10 rooms",type:"explore",goal:10},
+ {name:"Survive 2 minutes",type:"survive",goal:120},
+ {name:"Find an exit",type:"door",goal:1},
+ {name:"Discover 3 levels",type:"levels",goal:3},
+ {name:"Collect 5 Almond Water bottles",type:"water",goal:5},
+ {name:"Explore 15 rooms",type:"explore",goal:15},
+ {name:"Survive 5 minutes",type:"survive",goal:300}
+];
+
+function generateTasks(){
+ objectives=[...taskPool].sort(()=>rand()-.5).slice(0,3).map(t=>({...t,progress:0,done:false}));
+ updateTasks();
+}
+
+function taskProgress(type,amount=1){
+ for(const t of objectives){
+  if(t.type===type&&!t.done){
+   t.progress=Math.min(t.goal,t.progress+amount);
+   if(t.progress>=t.goal){
+    t.done=true;
+    player.sanity=Math.min(100,player.sanity+15);
+    msg("OBJECTIVE COMPLETE: "+t.name,4);
+   }
+  }
+ }
+ updateTasks();
+}
+
+function updateTasks(){
+ $("tasks").innerHTML="<b>OBJECTIVES</b><br>"+
+ objectives.map(t=>(t.done?"[X] ":"[ ] ")+t.name+" "+Math.floor(t.progress)+"/"+t.goal).join("<br>");
+}
+
+function collectItems(){
+ for(let i=items.length-1;i>=0;i--){
+  const it=items[i];
+  if(dist(player.x,player.y,it.x,it.y)<.65){
+   player.water++;
+   items.splice(i,1);
+   msg("ALMOND WATER ACQUIRED",2);
+  }
+ }
+}
+
+function drink(){
+ if(player.water<=0){msg("NO ALMOND WATER.",1);return}
+ player.water--;
+ player.sanity=Math.min(100,player.sanity+35);
+ player.health=Math.min(100,player.health+5);
+ msg("ALMOND WATER: SANITY RESTORED",3);
+ updateHUD();
+}
+
+function updateSanity(dt){
+ player.sanity=Math.max(0,player.sanity-dt*.12);
+ if(player.sanity<40){
+  $("noise").style.opacity=String(.15+rand()*.3);
+  $("status").textContent="SIGNAL: DISTORTED";
+ }else{
+  $("noise").style.opacity="0";
+  $("status").textContent="SIGNAL: "+(monsterVisible?"ENTITY DETECTED":"UNSTABLE");
+ }
+ if(player.sanity<20){
+  $("noise").style.opacity=String(.35+rand()*.35);
+  if(rand()<.01)msg("YOU HEAR SOMETHING.",2);
+ }
+ updateHUD();
+}
+
+function updateHUD(){
+ $("health").style.width=player.health+"%";
+ $("sanity").style.width=player.sanity+"%";
+ $("water").textContent=player.water;
+ $("health").style.background=player.health<30?"#ff2222":"#4cc477";
+ $("sanity").style.background=player.sanity<30?"#ff00ff":"#ad69df";
+}
+
+/* =========================================================
+   MAP
+   ========================================================= */
+
+function drawMap(){
+ mapCtx.fillStyle="#000";
+ mapCtx.fillRect(0,0,130,130);
+ const scale=4,ox=65-player.x*scale,oy=65-player.y*scale;
+
+ for(let y=0;y<HMAP;y++)for(let x=0;x<WMAP;x++){
+  if(!explored[y][x])continue;
+  mapCtx.fillStyle=cell(x,y)===1?"#555":"#b6b6b6";
+  mapCtx.fillRect(x*scale+ox,y*scale+oy,scale,scale);
+ }
+ for(const d of doors){
+  mapCtx.fillStyle="#ffe500";
+  mapCtx.fillRect((d.x+.5)*scale+ox,(d.y+.5)*scale+oy,scale,scale);
+ }
+ for(const m of monsters){
+  mapCtx.fillStyle="#f00";
+  mapCtx.fillRect(m.x*scale+ox-2,m.y*scale+oy-2,4,4);
+ }
+ mapCtx.fillStyle="#0f0";
+ mapCtx.fillRect(player.x*scale+ox-2,player.y*scale+oy-2,4,4);
+}
+
+/* =========================================================
+   AUDIO
+   ========================================================= */
+
+function initAudio(){
+ if(!audioCtx){
+  try{
+   audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+   startAmbient();
+  }catch(e){}
+ }
+}
+
+function sound(freq,duration,volume=.08,type="sine"){
+ if(!audioCtx||!soundEnabled)return;
+ const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+ osc.type=type;osc.frequency.value=freq;
+ gain.gain.value=volume;
+ osc.connect(gain);gain.connect(audioCtx.destination);
+ osc.start();
+ gain.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+duration);
+ osc.stop(audioCtx.currentTime+duration);
+}
+
+function startAmbient(){
+ if(!audioCtx)return;
+ const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+ osc.type="sawtooth";osc.frequency.value=48;
+ gain.gain.value=.015;
+ osc.connect(gain);gain.connect(audioCtx.destination);
+ osc.start();
+ ambientOsc={osc,gain};
+}
+
+function stopAmbient(){
+ if(ambientOsc){try{ambientOsc.osc.stop()}catch(e){}ambientOsc=null;}
+}
+
+/* =========================================================
+   GAME
+   ========================================================= */
+
+function endGame(){
+ paused=true;dead=true;
+ document.exitPointerLock?.();
+ $("overlay").style.display="flex";
+ $("start").textContent="RESTART";
+ $("message").textContent="SIGNAL LOST. YOU DID NOT ESCAPE.";
+}
+
+function startGame(){
+ initAudio();
+ stopAmbient();startAmbient();
+ player={x:2.5,y:2.5,angle:0,health:100,sanity:100,speed:2.4,run:3.6,water:0};
+ time=0;gameTime=0;dead=false;paused=false;gameRunning=true;
+ cellsVisited=0;visitedLevels=[];lastHit=0;generateTasks();
+ spawnWorld("LEVEL 0");updateHUD();
+ $("overlay").style.display="none";
+ canvas.requestPointerLock?.();
+}
+
+$("start").onclick=()=>{
+ if(gameRunning&&paused&&!dead){
+  paused=false;$("overlay").style.display="none";
+  canvas.requestPointerLock?.();
+ }else startGame();
+};
+
+document.addEventListener("keydown",e=>{
+ keys[e.code]=true;
+ if(e.code==="KeyE"&&!paused)enterDoor();
+ if(e.code==="KeyF"&&!paused)drink();
+});
+
+document.addEventListener("keyup",e=>keys[e.code]=false);
+
+document.addEventListener("mousemove",e=>{
+ if(!mouseLocked||paused)return;
+ player.angle+=e.movementX*.003;
+});
+
+document.addEventListener("pointerlockchange",()=>{
+ mouseLocked=document.pointerLockElement===canvas;
+ if(!mouseLocked&&gameRunning&&!dead){
+  paused=true;$("overlay").style.display="flex";
+  $("start").textContent="RESUME";
+  $("message").textContent="PAUSED";
+ }
+});
+
+function loop(ts){
+ requestAnimationFrame(loop);
+ const dt=Math.min((ts-lastTime)/1000,.05);
+ lastTime=ts;time+=dt;
+
+ if(paused||!gameRunning){
+  renderWorld();return;
+ }
+
+ gameTime+=dt;
+ movePlayer(dt);
+ updateDoors();
+ collectItems();
+ updateMonster(dt);
+ updateSanity(dt);
+
+ if(damageFlash>0){
+  damageFlash=Math.max(0,damageFlash-dt*2.5);
+  $("flash").style.opacity=damageFlash;
+ }
+
+ if(messageTimer>0){
+  messageTimer-=dt;
+  if(messageTimer<=0)$("message").textContent="";
+ }
+
+ lightFlicker=rand()<.012?.7:0;
+ taskProgress("survive",dt);
+ drawMap();
+ renderWorld();
+}
+
+requestAnimationFrame(loop);
+
+function resize(){
+ canvas.style.width="100%";
+ canvas.style.height="100%";
+}
+addEventListener("resize",resize);
+resize();
+
+makeWorld();
+renderWorld();
+</script>
+</body>
+</html>
